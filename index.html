@@ -1,91 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thaw and Sell Date Calculator</title>
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MSI Barcode Scanner</title>
+  <script type="module">
+    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/+esm';
+
+    const codeReader = new BrowserMultiFormatReader();
+    window.onload = () => {
+      const videoElement = document.getElementById('video');
+      codeReader.listVideoInputDevices().then(devices => {
+        const deviceId = devices[0]?.deviceId;
+        if (!deviceId) {
+          document.getElementById('output').textContent = 'No camera found.';
+          return;
         }
-        th, td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-    </style>
+
+        codeReader.decodeFromVideoDevice(deviceId, videoElement, (result, err) => {
+          if (result) {
+            document.getElementById('output').textContent = `Scanned: ${result.getText()}`;
+          } else if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error(err);
+            document.getElementById('output').textContent = `Error: ${err}`;
+          }
+        });
+      });
+    };
+  </script>
 </head>
 <body>
-    <table>
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>Days</th>
-                <th>Calculated Date</th>
-            </tr>
-        </thead>
-        <tbody id="dictionaryTable">
-        </tbody>
-    </table>
-
-    <script>
-        const dictionary = {
-            "Otis Spunkmeyer": "35",
-            "Quality Bakery Pies": "5",
-            "Kingâ€™s Hawaiian": "14",
-            "Cafe Valley Cakes": "10",
-            "2-Bite Cupcakes": "21",
-            "Kimâ€™s Cupcakes": "14",
-            "Clover Hill Danish": "30",
-            "Mrs. Freshley Rolls": "30",
-            "Mrs. Freshley Honey Buns": "30",
-            "Nemo Square Cakes": "7",
-            "Hostess Products": "12",
-            "Nemo Bundt Cakes": "30",
-            "Croissants": "7",
-            "Clyde Donuts": "2",
-            "Ashcraft Bolillos": "5",
-            "Ashcraft Garlic Bread": "5",
-            "Vanilla Twirl": "14",
-            "Lofthouse Frosted Cookies": "28",
-            "2-Bite Brownies": "10",
-            "Cafe Valley Muffins": "14",
-            "Kountry Boys Pies": "45",
-            "Nemo Cake": "7",
-            "Dessert Shell": "7",
-            "Father's Table Cake Roll": "10",
-            "Hostess (All)": "12",
-            "JJ's Pies": "21",
-            "Nemo's Coffee Cake": "30",
-            "Lofthouse Bucket of Bones": "140"
-        };
-
-        const tableBody = document.getElementById('dictionaryTable');
-        const today = new Date();
-
-        for (const [key, value] of Object.entries(dictionary)) {
-            const daysToAdd = parseInt(value, 10);
-            const calculatedDate = new Date(today);
-            calculatedDate.setDate(today.getDate() + daysToAdd);
-
-            const row = document.createElement('tr');
-            const itemCell = document.createElement('td');
-            const daysCell = document.createElement('td');
-            const dateCell = document.createElement('td');
-
-            itemCell.textContent = key;
-            daysCell.textContent = value;
-            dateCell.textContent = calculatedDate.toDateString();
-
-            row.appendChild(itemCell);
-            row.appendChild(daysCell);
-            row.appendChild(dateCell);
-            tableBody.appendChild(row);
-        }
-    </script>
+  <h2>MSI Barcode Scanner</h2>
+  <video id="video" width="300" height="200" style="border:1px solid black"></video>
+  <p id="output">Waiting for scan...</p>
 </body>
 </html>
