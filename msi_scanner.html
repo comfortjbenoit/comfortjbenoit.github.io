@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MSI Barcode Scanner</title>
+  <script type="module">
+    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/+esm';
+
+    const codeReader = new BrowserMultiFormatReader();
+    window.onload = () => {
+      const videoElement = document.getElementById('video');
+      codeReader.listVideoInputDevices().then(devices => {
+        const deviceId = devices[0]?.deviceId;
+        if (!deviceId) {
+          document.getElementById('output').textContent = 'No camera found.';
+          return;
+        }
+
+        codeReader.decodeFromVideoDevice(deviceId, videoElement, (result, err) => {
+          if (result) {
+            document.getElementById('output').textContent = `Scanned: ${result.getText()}`;
+          } else if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error(err);
+            document.getElementById('output').textContent = `Error: ${err}`;
+          }
+        });
+      });
+    };
+  </script>
+</head>
+<body>
+  <h2>MSI Barcode Scanner</h2>
+  <video id="video" width="300" height="200" style="border:1px solid black"></video>
+  <p id="output">Waiting for scan...</p>
+</body>
+</html>
