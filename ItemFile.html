@@ -44,16 +44,10 @@
       reader.onload = function(evt) {
         const lines = evt.target.result.split('\n');
         data = lines.map(line => {
-          // Regex: vendor, upc, description, item code, pack, size, u/sell, dept, [tpr block], [sale block]
-          // tpr block: tpr price*, tpr start, tpr end
-          // sale block: sale price*, sale start, sale end
           let main = line.match(/^(\S+)\s+(\S+)\s+(.+?)\s+(\*?\d+)\s+(\d+)\s+(.+?)\s+([\d\.]+)\s+(\d{3})/);
           if (!main) return null;
           let rest = line.slice(main[0].length).trim();
-          // Parse TPR block and Sale block
-          // TPR: price* date date
           let tpr = rest.match(/([\d\.]+)\*\s+(\d{2}-\d{2}-\d{2})\s+(\d{2}-\d{2}-\d{2})/);
-          // Sale: price* date date (may or may not follow TPR)
           let sale = rest.match(/([\d\.]+)\*\s+(\d{2}-\d{2}-\d{2})\s+(\d{2}-\d{2}-\d{2})$/);
           return {
             vendor: main[1],
@@ -77,17 +71,64 @@
       reader.readAsText(file);
     });
 
+    // UPC-E to UPC-A expansion (for codes starting with 0, standard parity)
+    function upcEtoA(upce) {
+      // Only supports 6-digit UPC-E, returns 12-digit UPC-A. If not convertible, returns upce.
+      if (!/^\d{6}$/.test(upce)) return upce;
+      const d = upce.split("");
+      let upca = "";
+      switch(d[5]) {
+        case '0': case '1': case '2':
+          upca = d[0] + d[1] + d[2] + d[5] + "0000" + d[3] + d[4];
+          break;
+        case '3':
+          upca = d[0] + d[1] + d[2] + d[3] + "00000" + d[4];
+          break;
+        case '4':
+          upca = d[0] + d[1] + d[2] + d[3] + d[4] + "00000";
+          break;
+        default:
+          upca = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + "0000";
+      }
+      // Prepend number system digit, usually 0 for UPC-E
+      return "0" + upca;
+    }
+
+    function normalizeUPC(upc) {
+      return upc.replace(/[^0-9]/g, "");
+    }
+
     function search() {
       const typeMap = {upc: "upc", vendor: "vendor", description: "description", itemcode: "itemcode"};
       const type = typeMap[document.getElementById('searchtype').value];
-      const term = document.getElementById('search').value.trim().toLowerCase();
+      const rawTerm = document.getElementById('search').value.trim();
+      if (!rawTerm) return;
+      // Remove non-digits, try to normalize to UPC-A if possible
+      const digits = normalizeUPC(rawTerm);
+      let expandedUPC = digits;
+      // If UPC-E, expand to UPC-A
+      if (digits.length === 6) expandedUPC = upcEtoA(digits);
+      // Also allow searching for partials (10, 12, 13 digits)
       let results = [];
-      if (!term) return;
-      results = data.filter(row => {
-        if (!row) return false;
-        if (type === "upc") return row.upc.replace(/-/g,'') === term.replace(/-/g,'');
-        else return row[type] && row[type].toLowerCase().includes(term);
-      });
+      if (type === "upc") {
+        results = data.filter(row => {
+          if (!row) return false;
+          // Normalize data UPC
+          let rowUPC = normalizeUPC(row.upc);
+          // Check against UPC, expanded UPC, and inside description
+          return (
+            rowUPC.includes(digits) ||
+            rowUPC.includes(expandedUPC) ||
+            normalizeUPC(row.description).includes(digits) ||
+            normalizeUPC(row.description).includes(expandedUPC)
+          );
+        });
+      } else {
+        results = data.filter(row => {
+          if (!row) return false;
+          return row[type] && row[type].toLowerCase().includes(rawTerm.toLowerCase());
+        });
+      }
       showResults(results);
     }
 
@@ -150,14 +191,15 @@
       });
       Quagga.onDetected(function(result) {
         Quagga.stop();
-        document.getElementById('search').value = formatUPC(result.codeResult.code);
+        let code = result.codeResult.code;
+        // If UPC-E (6 digits), expand to UPC-A
+        if (/^\d{6}$/.test(code)) {
+          code = upcEtoA(code);
+        }
+        document.getElementById('searchtype').value = "upc";
+        document.getElementById('search').value = code;
         search();
       });
-    }
-
-    function formatUPC(upc) {
-      if (upc.length === 12) return `${upc.slice(0,3)}-${upc.slice(3,8)}-${upc.slice(8)}`;
-      return upc;
     }
   </script>
 </body>
