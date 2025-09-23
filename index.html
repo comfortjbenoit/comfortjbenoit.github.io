@@ -33,7 +33,7 @@
   .error{color:#c0392b}
   .ok{color:#0b8f3b}
   pre{background:#0f1724;color:#e6f0ff;padding:10px;border-radius:8px;overflow:auto}
-  #inventoryGrid {
+  #inventoryGrid { 
     font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace;
     font-size: 13px;
     background: #0f1724;
@@ -60,7 +60,6 @@
     font-family: monospace;
     margin-left: 10px;
   }
-  /* Known stores modal */
   #storesModalOverlay {
     position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(32,40,60,0.18);display:none;align-items:center;justify-content:center;z-index:1000;
   }
@@ -84,10 +83,39 @@
     font-size:12px;
     margin:8px 0;
   }
+
+  /* MOBILE OVERRIDES */
+  body.mobile .wrap { max-width: 100vw; margin: 0; padding: 2vw;}
+  body.mobile .row { flex-direction: column; gap: 0;}
+  body.mobile .col.card { min-width: 0; padding: 10px;}
+  body.mobile #inventoryGrid { font-size: 11px; padding: 4px;}
+  body.mobile th, body.mobile td { font-size: 11px; padding: 4px;}
+  body.mobile #storesModal { min-width:0; width:95vw; }
+  body.mobile .small, body.mobile button, body.mobile input { font-size:14px;}
+  body.mobile label { font-size:15px;}
+  body.mobile h1 { font-size:20px;}
+  body.mobile .card { padding:6px;}
+  body.mobile .list { max-height:140px;}
+  body.mobile .actions { flex-direction:column;gap:4px;}
+  body.mobile footer { font-size:12px;}
+  @media (max-width: 600px) {
+    .wrap { padding: 2vw; }
+    .row { flex-direction: column; gap: 0; }
+    .col.card { min-width: 0; padding: 10px;}
+    #inventoryGrid { font-size: 11px; padding: 4px;}
+    th,td { font-size: 11px; padding: 4px;}
+    #storesModal { min-width:0; width:95vw; }
+    .small, button, input { font-size:14px;}
+    label { font-size:15px;}
+    h1 { font-size:20px;}
+    .card { padding:6px;}
+    .list { max-height:140px;}
+    .actions { flex-direction:column;gap:4px;}
+    footer { font-size:12px;}
+  }
 </style>
 </head>
 <body>
-
 <header>
   <h1>Joe Valadez Inventory</h1>
   <button id="storesBtn" title="Edit known stores">&#128203; Stores</button>
@@ -160,6 +188,16 @@
 </div>
 
 <script>
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+// Set a class for mobile/desktop as soon as possible
+if (isMobileDevice()) {
+  document.body.classList.add('mobile');
+} else {
+  document.body.classList.add('desktop');
+}
+
 const defaultStores = ["001","003","004","005","007","008","010","011","012","014","015","017","018","019","201","202","203","204","206","207","208","209","211","214","215","216","217"];
 const LS_KEY = "joeValadezInventoryStores";
 
@@ -593,8 +631,7 @@ pdfInvBtn.onclick = ()=> {
 
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// Render inventory in a grid as monospaced text ("Excel sheet like" in an iframe-style box)
-// Now with interactive editing!
+// Render inventory grid as interactive HTML table
 function renderInventoryGrid(agg){
   if(!agg || !agg.templateItems || !agg.stores || !agg.data){
     inventoryGrid.textContent = 'No inventory aggregated yet.';
@@ -658,7 +695,7 @@ function renderInventoryGrid(agg){
     td.onclick = function(e){
       if(td.querySelector('input')) return; // already editing
       const origVal = td.textContent;
-      td.innerHTML = `<input type="text" value="${escapeHtml(origVal)}" style="width:60px;" class="cell-editing" />`;
+      td.innerHTML = `<input type="number" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(origVal)}" style="width:60px;" class="cell-editing" />`;
       const inp = td.querySelector('input');
       inp.focus();
       inp.select();
@@ -686,6 +723,15 @@ function renderInventoryGrid(agg){
     };
   });
 }
+
+// Show mobile tip if on mobile
+window.addEventListener('DOMContentLoaded', function() {
+  if(document.body.classList.contains('mobile')) {
+    setTimeout(function(){
+      alert("Tip: For easier editing, rotate your phone to landscape. You can scroll the inventory grid sideways.");
+    }, 1500);
+  }
+});
 </script>
 </body>
 </html>
