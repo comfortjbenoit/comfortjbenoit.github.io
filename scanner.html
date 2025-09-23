@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UPC Search Tool (ZXing)</title>
+  <!-- Tailwind CSS CDN for UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ZXing JS library -->
+  <script src="https://unpkg.com/@zxing/browser@latest"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-md mx-auto py-8 px-4">
+    <h2 class="text-2xl font-bold text-center mb-4 text-blue-700">UPC Search Tool</h2>
+    <label class="block mb-4">
+      <span class="block text-sm font-medium text-gray-700 mb-2">Upload Data File</span>
+      <input type="file" id="datafile" accept=".txt,.csv,.json"
+        class="block w-full text-sm rounded-lg border border-gray-300 p-2 bg-white focus:border-blue-500 focus:outline-none"/>
+    </label>
+    <div class="flex items-center mb-2 gap-2">
+      <select id="searchtype" class="rounded-lg border-gray-300 p-2 text-sm w-1/2 focus:border-blue-500">
+        <option value="upc">UPC</option>
+        <option value="vendor">Vendor</option>
+        <option value="description">Description</option>
+        <option value="itemcode">Item Code</option>
+      </select>
+      <input type="text" id="search" class="rounded-lg border-gray-300 p-2 text-sm w-full focus:border-blue-500" placeholder="Type to search"/>
+    </div>
+    <div class="flex gap-2 mb-4">
+      <button onclick="search()"
+        class="w-1/2 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition">🔍 Search</button>
+      <button onclick="startScanZXing()"
+        class="w-1/2 bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition">📷 Scan UPC</button>
+    </div>
+    <!-- Scanner Area -->
+    <div id="scanner" class="rounded-lg bg-gray-200 mb-4 overflow-hidden flex justify-center items-center" style="height: 260px;">
+      <video id="video" style="max-width:100%;height:100%;border-radius:12px;display:none;"></video>
+    </div>
+    <div id="results"></div>
+    <div id="scan-result" class="mt-4 text-center text-lg font-semibold text-green-700"></div>
+  </div>
+
+  <script>
+    let data = [];
+    let codeReader = null;
+    let activeZXingStream = false;
+
+    // Updated parser for your file format
+    document.getElementById('datafile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const lines = evt.target.result.split('\n');
+        data = lines.map(line => {
+          let main = line.match(/^(\S+)\s+(\S+)\s+(.+?)\s+(\*?\d+)\s+(\d+)\s+(.+?)\s+([\d\.]+)\s+(\d{3})/);
+          if (!main) return null;
+          let rest = line.slice(main[0].length).trim();
+          let tpr = rest.match(/([\d\.]+)\*\s+(\d{2}-\d{2}-\d{2})\s+(\d{2}-\d{2}-\d{2})/);
+          let sale = rest.match(/([\d\.]+)\*\s+(\d{2}-\d{2}-\d{2})\s+(\d{2}-\d{2}-\d{2})$/);
+          return {
+            vendor: main[1],
+            upc: main[2],
+            description: main[3].trim(),
+            itemcode: main[4].replace('*',''),
+            pack: main[5],
+            size: main[6].trim(),
+            usell: main[7],
+            department: main[8],
+            tpr_price: tpr ? tpr[1] : '',
+            tpr_start: tpr ? tpr[2] : '',
+            tpr_end: tpr ? tpr[3] : '',
+            sale_price: sale ? sale[1] : '',
+            sale_start: sale ? sale[2] : '',
+            sale_end: sale ? sale[3] : ''
+          };
+        }).filter(row => row !== null);
+        alert("File loaded: " + data.length + " items.");
+      };
+      reader.readAsText(file);
+    });
+
+    // UPC-E to UPC-A expansion (for codes starting with 0, standard parity)
+    function upcEtoA(upce) {
+      if (!/^\d{6}$/.test(upce)) return upce;
+      const d = upce.split("");
+      let upca = "";
+      switch(d[5]) {
+        case '0': case '1': case '2':
+          upca = d[0] + d[1] + d[2] + d[5] + "0000" + d[3] + d[4];
+          break;
+        case '3':
+          upca = d[0] + d[1] + d[2] + d[3] + "00000" + d[4];
+          break;
+        case '4':
+          upca = d[0] + d[1] + d[2] + d[3] + d[4] + "00000";
+          break;
+        default:
+          upca = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + "0000";
+      }
+      return "0" + upca;
+    }
+    function normalizeUPC(upc) {
+      return upc.replace(/[^0-9]/g, "");
+    }
+    function search(upcOverride) {
+      const typeMap = {upc: "upc", vendor: "vendor", description: "description", itemcode: "itemcode"};
+      const type = typeMap[document.getElementById('searchtype').value];
+      const rawTerm = upcOverride !== undefined ? upcOverride : document.getElementById('search').value.trim();
+      if (!rawTerm) return;
+      const digits = normalizeUPC(rawTerm);
+      let expandedUPC = digits;
+      if (digits.length === 6) expandedUPC = upcEtoA(digits);
+      let results = [];
+      if (type === "upc") {
+        results = data.filter(row => {
+          if (!row) return false;
+          let rowUPC = normalizeUPC(row.upc);
+          return (
+            rowUPC.includes(digits) ||
+            rowUPC.includes(expandedUPC) ||
+            normalizeUPC(row.description).includes(digits) ||
+            normalizeUPC(row.description).includes(expandedUPC)
+          );
+        });
+      } else {
+        results = data.filter(row => {
+          if (!row) return false;
+          return row[type] && row[type].toLowerCase().includes(rawTerm.toLowerCase());
+        });
+      }
+      showResults(results);
+    }
+    function showResults(results) {
+      const div = document.getElementById('results');
+      if (results.length === 0) {
+        div.innerHTML = `<div class="bg-white rounded-lg p-4 shadow text-center text-red-700 font-semibold">No results found.</div>`;
+        return;
+      }
+      div.innerHTML = results.map(row =>
+        `<div class="bg-white rounded-lg shadow p-4 mb-3 flex flex-col gap-1">
+          <div class="font-bold text-lg text-blue-800">${row.description}</div>
+          <div class="text-sm text-gray-600">Vendor: <span class="font-semibold text-gray-900">${row.vendor}</span></div>
+          <div class="text-sm text-gray-600">UPC: <span class="font-semibold text-gray-900">${row.upc}</span></div>
+          <div class="flex flex-wrap gap-2 mt-2 text-sm">
+            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">Item Code: ${row.itemcode}</span>
+            <span class="bg-green-100 text-green-800 px-2 py-1 rounded">Pack: ${row.pack}</span>
+            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded">Size: ${row.size}</span>
+            <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded">U/Sell: ${row.usell}</span>
+            <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded">Dept: ${row.department}</span>
+          </div>
+          ${row.tpr_price ? `
+          <div class="flex flex-wrap gap-2 mt-1 text-sm">
+            <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">TPR: $${row.tpr_price}</span>
+            <span class="bg-yellow-50 text-yellow-700 px-2 py-1 rounded">TPR Start: ${row.tpr_start}</span>
+            <span class="bg-yellow-50 text-yellow-700 px-2 py-1 rounded">TPR End: ${row.tpr_end}</span>
+          </div>
+          ` : ""}
+          ${row.sale_price ? `
+          <div class="flex flex-wrap gap-2 mt-1 text-sm">
+            <span class="bg-red-100 text-red-800 px-2 py-1 rounded">Sale: $${row.sale_price}</span>
+            <span class="bg-red-50 text-red-700 px-2 py-1 rounded">Sale Start: ${row.sale_start}</span>
+            <span class="bg-red-50 text-red-700 px-2 py-1 rounded">Sale End: ${row.sale_end}</span>
+          </div>
+          ` : ""}
+        </div>`
+      ).join('');
+    }
+
+    // ZXing Scanner
+    function startScanZXing() {
+      if (activeZXingStream && codeReader) {
+        codeReader.reset();
+        activeZXingStream = false;
+      }
+      document.getElementById('scan-result').textContent = "";
+      const video = document.getElementById('video');
+      video.style.display = "block";
+      codeReader = new ZXing.BrowserMultiFormatReader();
+      codeReader.decodeFromVideoDevice(null, video, (result, err) => {
+        if (result) {
+          document.getElementById('scan-result').textContent = "Scanned: " + result.text;
+          video.style.display = "none";
+          codeReader.reset();
+          activeZXingStream = false;
+          document.getElementById('searchtype').value = "upc";
+          document.getElementById('search').value = result.text;
+          search(result.text);
+        }
+      }).then(() => {
+        activeZXingStream = true;
+      }).catch(err => {
+        document.getElementById('scan-result').textContent = "Error: " + err;
+        video.style.display = "none";
+        activeZXingStream = false;
+      });
+    }
+  </script>
+</body>
+</html>
