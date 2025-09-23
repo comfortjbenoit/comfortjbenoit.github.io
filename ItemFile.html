@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>UPC Search Tool</title>
-  <!-- Tailwind CSS CDN -->
+  <title>UPC Search Tool (html5-qrcode)</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- html5-qrcode library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
   <div class="max-w-md mx-auto py-8 px-4">
@@ -26,17 +27,20 @@
     <div class="flex gap-2 mb-4">
       <button onclick="search()"
         class="w-1/2 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition">🔍 Search</button>
-      <button onclick="startScan()"
+      <button id="scan-btn"
         class="w-1/2 bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition">📷 Scan UPC</button>
     </div>
-    <div id="scanner" class="rounded-lg bg-gray-200 mb-4 overflow-hidden" style="height: 260px;"></div>
+    <div id="scanner-container" class="rounded-lg bg-gray-200 mb-4 overflow-hidden flex justify-center items-center" style="height: 260px;">
+      <div id="html5-qrcode-scanner" style="width: 300px; margin:auto; display:none;"></div>
+    </div>
     <div id="results"></div>
+    <div id="scan-result" class="mt-4 text-center text-lg font-semibold text-green-700"></div>
   </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script>
     let data = [];
-    // Updated parser for new format
+    let html5QrcodeScanner = null;
+    let scanning = false;
+
     document.getElementById('datafile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -71,9 +75,7 @@
       reader.readAsText(file);
     });
 
-    // UPC-E to UPC-A expansion (for codes starting with 0, standard parity)
     function upcEtoA(upce) {
-      // Only supports 6-digit UPC-E, returns 12-digit UPC-A. If not convertible, returns upce.
       if (!/^\d{6}$/.test(upce)) return upce;
       const d = upce.split("");
       let upca = "";
@@ -90,32 +92,24 @@
         default:
           upca = d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + "0000";
       }
-      // Prepend number system digit, usually 0 for UPC-E
       return "0" + upca;
     }
-
     function normalizeUPC(upc) {
       return upc.replace(/[^0-9]/g, "");
     }
-
-    function search() {
+    function search(upcOverride) {
       const typeMap = {upc: "upc", vendor: "vendor", description: "description", itemcode: "itemcode"};
       const type = typeMap[document.getElementById('searchtype').value];
-      const rawTerm = document.getElementById('search').value.trim();
+      const rawTerm = upcOverride !== undefined ? upcOverride : document.getElementById('search').value.trim();
       if (!rawTerm) return;
-      // Remove non-digits, try to normalize to UPC-A if possible
       const digits = normalizeUPC(rawTerm);
       let expandedUPC = digits;
-      // If UPC-E, expand to UPC-A
       if (digits.length === 6) expandedUPC = upcEtoA(digits);
-      // Also allow searching for partials (10, 12, 13 digits)
       let results = [];
       if (type === "upc") {
         results = data.filter(row => {
           if (!row) return false;
-          // Normalize data UPC
           let rowUPC = normalizeUPC(row.upc);
-          // Check against UPC, expanded UPC, and inside description
           return (
             rowUPC.includes(digits) ||
             rowUPC.includes(expandedUPC) ||
@@ -131,7 +125,6 @@
       }
       showResults(results);
     }
-
     function showResults(results) {
       const div = document.getElementById('results');
       if (results.length === 0) {
@@ -168,39 +161,62 @@
       ).join('');
     }
 
-    // Barcode scanning
-    function startScan() {
-      const scannerDiv = document.getElementById('scanner');
-      scannerDiv.innerHTML = '';
-      Quagga.init({
-        inputStream : {
-          name : "Live",
-          type : "LiveStream",
-          target: scannerDiv,
-          constraints: { facingMode: "environment" }
-        },
-        decoder : {
-          readers : ["upc_reader","upc_e_reader","ean_reader","ean_8_reader"]
+    document.getElementById('scan-btn').onclick = function() {
+      if (scanning) return;
+      scanning = true;
+      document.getElementById('scan-result').textContent = "";
+      document.getElementById('html5-qrcode-scanner').style.display = "block";
+      // Stop previous scanner if any
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear();
+        html5QrcodeScanner = null;
+      }
+      html5QrcodeScanner = new Html5Qrcode("html5-qrcode-scanner");
+      Html5Qrcode.getCameras().then(cameras => {
+        if (cameras && cameras.length) {
+          let cameraId = cameras[0].id;
+          html5QrcodeScanner.start(
+            cameraId,
+            {
+              fps: 10,
+              qrbox: {width: 250, height: 100},
+              formatsToSupport: [
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E,
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8
+              ]
+            },
+            (decodedText, decodedResult) => {
+              // Stop scanning after first result
+              html5QrcodeScanner.stop().then(() => {
+                scanning = false;
+                document.getElementById('html5-qrcode-scanner').style.display = "none";
+                document.getElementById('scan-result').textContent = "Scanned: " + decodedText;
+                document.getElementById('searchtype').value = "upc";
+                document.getElementById('search').value = decodedText;
+                search(decodedText);
+              });
+            },
+            (errorMessage) => {
+              // ignore scan errors
+            }
+          ).catch(err => {
+            document.getElementById('scan-result').textContent = "Camera error: " + err;
+            document.getElementById('html5-qrcode-scanner').style.display = "none";
+            scanning = false;
+          });
+        } else {
+          document.getElementById('scan-result').textContent = "No camera found.";
+          document.getElementById('html5-qrcode-scanner').style.display = "none";
+          scanning = false;
         }
-      }, function(err) {
-        if (err) {
-          alert('Error initializing scanner: ' + err);
-          return;
-        }
-        Quagga.start();
+      }).catch(err => {
+        document.getElementById('scan-result').textContent = "Camera access error: " + err;
+        document.getElementById('html5-qrcode-scanner').style.display = "none";
+        scanning = false;
       });
-      Quagga.onDetected(function(result) {
-        Quagga.stop();
-        let code = result.codeResult.code;
-        // If UPC-E (6 digits), expand to UPC-A
-        if (/^\d{6}$/.test(code)) {
-          code = upcEtoA(code);
-        }
-        document.getElementById('searchtype').value = "upc";
-        document.getElementById('search').value = code;
-        search();
-      });
-    }
+    };
   </script>
 </body>
 </html>
