@@ -28,12 +28,12 @@
     <div class="flex gap-2 mb-4">
       <button onclick="search()"
         class="w-1/2 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition">🔍 Search</button>
-      <button onclick="startScanZXing()"
+      <button id="scan-btn"
         class="w-1/2 bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition">📷 Scan UPC</button>
     </div>
     <!-- Scanner Area -->
     <div id="scanner" class="rounded-lg bg-gray-200 mb-4 overflow-hidden flex justify-center items-center" style="height: 260px;">
-      <video id="video" style="max-width:100%;height:100%;border-radius:12px;display:none;"></video>
+      <video id="video" style="max-width:100%;height:100%;border-radius:12px;display:none;" playsinline></video>
     </div>
     <div id="results"></div>
     <div id="scan-result" class="mt-4 text-center text-lg font-semibold text-green-700"></div>
@@ -44,7 +44,7 @@
     let codeReader = null;
     let activeZXingStream = false;
 
-    // Updated parser for your file format
+    // Parser for your file format
     document.getElementById('datafile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -167,33 +167,33 @@
     }
 
     // ZXing Scanner
-    function startScanZXing() {
-      if (activeZXingStream && codeReader) {
-        codeReader.reset();
-        activeZXingStream = false;
+    document.getElementById('scan-btn').onclick = async function startScanZXing() {
+      // Stop any previous scan
+      if (codeReader) {
+        try { codeReader.reset(); } catch (e) {}
       }
       document.getElementById('scan-result').textContent = "";
       const video = document.getElementById('video');
       video.style.display = "block";
       codeReader = new ZXing.BrowserMultiFormatReader();
-      codeReader.decodeFromVideoDevice(null, video, (result, err) => {
-        if (result) {
-          document.getElementById('scan-result').textContent = "Scanned: " + result.text;
-          video.style.display = "none";
-          codeReader.reset();
-          activeZXingStream = false;
-          document.getElementById('searchtype').value = "upc";
-          document.getElementById('search').value = result.text;
-          search(result.text);
-        }
-      }).then(() => {
+      try {
+        await codeReader.decodeFromVideoDevice(null, video, (result, err) => {
+          if (result) {
+            document.getElementById('scan-result').textContent = "Scanned: " + result.text;
+            video.style.display = "none";
+            codeReader.reset();
+            document.getElementById('searchtype').value = "upc";
+            document.getElementById('search').value = result.text;
+            search(result.text);
+          }
+        });
         activeZXingStream = true;
-      }).catch(err => {
+      } catch (err) {
         document.getElementById('scan-result').textContent = "Error: " + err;
         video.style.display = "none";
         activeZXingStream = false;
-      });
-    }
+      }
+    };
   </script>
 </body>
 </html>
