@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>UPC Search Tool (html5-qrcode)</title>
+  <title>UPC Search Tool (No Scan)</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- html5-qrcode library -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
   <div class="max-w-md mx-auto py-8 px-4">
@@ -24,23 +22,14 @@
       </select>
       <input type="text" id="search" class="rounded-lg border-gray-300 p-2 text-sm w-full focus:border-blue-500" placeholder="Type to search"/>
     </div>
-    <div class="flex gap-2 mb-4">
+    <div class="mb-4">
       <button onclick="search()"
-        class="w-1/2 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition">🔍 Search</button>
-//      <button id="scan-btn"
-//        class="w-1/2 bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition">📷 Scan UPC</button>
+        class="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition">🔍 Search</button>
     </div>
-//    <div id="scanner-container" class="rounded-lg bg-gray-200 mb-4 overflow-hidden flex justify-center items-center" style="height: 260px;">
-//      <div id="html5-qrcode-scanner" style="width: 300px; margin:auto; display:none;"></div>
- //   </div>
     <div id="results"></div>
-//    <div id="scan-result" class="mt-4 text-center text-lg font-semibold text-green-700"></div>
   </div>
   <script>
     let data = [];
-    let html5QrcodeScanner = null;
-    let scanning = false;
-
     document.getElementById('datafile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -160,63 +149,6 @@
         </div>`
       ).join('');
     }
-
-    document.getElementById('scan-btn').onclick = function() {
-      if (scanning) return;
-      scanning = true;
-      document.getElementById('scan-result').textContent = "";
-      document.getElementById('html5-qrcode-scanner').style.display = "block";
-      // Stop previous scanner if any
-      if (html5QrcodeScanner) {
-        html5QrcodeScanner.clear();
-        html5QrcodeScanner = null;
-      }
-      html5QrcodeScanner = new Html5Qrcode("html5-qrcode-scanner");
-      Html5Qrcode.getCameras().then(cameras => {
-        if (cameras && cameras.length) {
-          let cameraId = cameras[0].id;
-          html5QrcodeScanner.start(
-            cameraId,
-            {
-              fps: 10,
-              qrbox: {width: 250, height: 100},
-              formatsToSupport: [
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.UPC_E,
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8
-              ]
-            },
-            (decodedText, decodedResult) => {
-              // Stop scanning after first result
-              html5QrcodeScanner.stop().then(() => {
-                scanning = false;
-                document.getElementById('html5-qrcode-scanner').style.display = "none";
-                document.getElementById('scan-result').textContent = "Scanned: " + decodedText;
-                document.getElementById('searchtype').value = "upc";
-                document.getElementById('search').value = decodedText;
-                search(decodedText);
-              });
-            },
-            (errorMessage) => {
-              // ignore scan errors
-            }
-          ).catch(err => {
-            document.getElementById('scan-result').textContent = "Camera error: " + err;
-            document.getElementById('html5-qrcode-scanner').style.display = "none";
-            scanning = false;
-          });
-        } else {
-          document.getElementById('scan-result').textContent = "No camera found.";
-          document.getElementById('html5-qrcode-scanner').style.display = "none";
-          scanning = false;
-        }
-      }).catch(err => {
-        document.getElementById('scan-result').textContent = "Camera access error: " + err;
-        document.getElementById('html5-qrcode-scanner').style.display = "none";
-        scanning = false;
-      });
-    };
   </script>
 </body>
 </html>
