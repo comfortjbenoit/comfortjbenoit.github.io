@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UPC Search Tool</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-md mx-auto py-8 px-4">
+    <h2 class="text-2xl font-bold text-center mb-4 text-blue-700">UPC Search Tool</h2>
+    <!-- File Upload -->
+    <label class="block mb-4">
+      <span class="block text-sm font-medium text-gray-700 mb-2">Upload Data File</span>
+      <input type="file" id="datafile" accept=".txt,.csv,.json"
+        class="block w-full text-sm rounded-lg border border-gray-300 p-2 bg-white focus:border-blue-500 focus:outline-none"/>
+    </label>
+    <!-- Search Controls -->
+    <div class="flex items-center mb-2 gap-2">
+      <select id="searchtype" class="rounded-lg border-gray-300 p-2 text-sm w-1/2 focus:border-blue-500">
+        <option value="upc">UPC</option>
+        <option value="vendor">Vendor</option>
+        <option value="description">Description</option>
+      </select>
+      <input type="text" id="search" class="rounded-lg border-gray-300 p-2 text-sm w-full focus:border-blue-500" placeholder="Type to search"/>
+    </div>
+    <!-- Action Buttons -->
+    <div class="flex gap-2 mb-4">
+      <button onclick="search()"
+        class="w-1/2 bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 transition">🔍 Search</button>
+      <button onclick="startScan()"
+        class="w-1/2 bg-green-600 text-white font-semibold py-2 rounded-lg hover:bg-green-700 transition">📷 Scan UPC</button>
+    </div>
+    <!-- Scanner Area -->
+    <div id="scanner" class="rounded-lg bg-gray-200 mb-4 overflow-hidden" style="height: 260px;"></div>
+    <!-- Results -->
+    <div id="results"></div>
+  </div>
+
+  <!-- QuaggaJS for barcode scanning -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script>
+    let data = [];
+    let headers = ["vendor","upc","description","department","category","u_sell","tpr","sale"];
+    // Parse uploaded file
+    document.getElementById('datafile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const lines = evt.target.result.split('\n');
+        data = lines.map(line => {
+          let parts = line.match(/^(\S+)\s+(\S+)\s+(.+?)\s+(\d{3})\s+(\d+)\s+([\d\.]+)(?:\s+([\d\.]+\*)?)?(?:\s+([\d\.]+\*)?)?$/);
+          if (!parts) return null;
+          return {
+            vendor: parts[1],
+            upc: parts[2],
+            description: parts[3].trim(),
+            department: parts[4],
+            category: parts[5],
+            u_sell: parts[6],
+            tpr: parts[7] ? parts[7].replace('*','') : '',
+            sale: parts[8] ? parts[8].replace('*','') : ''
+          };
+        }).filter(row => row !== null);
+        alert("File loaded: " + data.length + " items.");
+      };
+      reader.readAsText(file);
+    });
+
+    function search() {
+      const type = document.getElementById('searchtype').value;
+      const term = document.getElementById('search').value.trim().toLowerCase();
+      let results = [];
+      if (!term) return;
+      results = data.filter(row => {
+        if (!row) return false;
+        if (type === "upc") return row.upc.replace(/-/g,'') === term.replace(/-/g,'');
+        else return row[type] && row[type].toLowerCase().includes(term);
+      });
+      showResults(results);
+    }
+
+    function showResults(results) {
+      const div = document.getElementById('results');
+      if (results.length === 0) {
+        div.innerHTML = `<div class="bg-white rounded-lg p-4 shadow text-center text-red-700 font-semibold">No results found.</div>`;
+        return;
+      }
+      div.innerHTML = results.map(row =>
+        `<div class="bg-white rounded-lg shadow p-4 mb-3 flex flex-col gap-1">
+          <div class="font-bold text-lg text-blue-800">${row.description}</div>
+          <div><span class="font-semibold text-gray-700">Vendor:</span> <span class="text-gray-900">${row.vendor}</span></div>
+          <div><span class="font-semibold text-gray-700">UPC:</span> <span class="text-gray-900">${row.upc}</span></div>
+          <div class="flex flex-wrap gap-2 mt-2 text-sm">
+            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">Dept: ${row.department}</span>
+            <span class="bg-green-100 text-green-800 px-2 py-1 rounded">Cat: ${row.category}</span>
+            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded">U/Sell: ${row.u_sell}</span>
+            ${row.tpr ? `<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">TPR: ${row.tpr}</span>` : ""}
+            ${row.sale ? `<span class="bg-red-100 text-red-800 px-2 py-1 rounded">Sale: ${row.sale}</span>` : ""}
+          </div>
+        </div>`
+      ).join('');
+    }
+
+    // Barcode scanning
+    function startScan() {
+      const scannerDiv = document.getElementById('scanner');
+      scannerDiv.innerHTML = '';
+      Quagga.init({
+        inputStream : {
+          name : "Live",
+          type : "LiveStream",
+          target: scannerDiv,
+          constraints: { facingMode: "environment" }
+        },
+        decoder : {
+          readers : ["upc_reader","upc_e_reader","ean_reader","ean_8_reader"]
+        }
+      }, function(err) {
+        if (err) {
+          alert('Error initializing scanner: ' + err);
+          return;
+        }
+        Quagga.start();
+      });
+      Quagga.onDetected(function(result) {
+        Quagga.stop();
+        document.getElementById('search').value = formatUPC(result.codeResult.code);
+        search();
+      });
+    }
+
+    function formatUPC(upc) {
+      if (upc.length === 12) return `${upc.slice(0,3)}-${upc.slice(3,8)}-${upc.slice(8)}`;
+      return upc;
+    }
+  </script>
+</body>
+</html>
