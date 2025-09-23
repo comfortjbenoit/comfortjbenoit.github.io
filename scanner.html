@@ -3,9 +3,7 @@
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>UPC Search Tool (ZXing)</title>
-  <!-- Tailwind CSS CDN for UI -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- ZXing JS library -->
   <script src="https://unpkg.com/@zxing/browser@latest"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -42,9 +40,7 @@
   <script>
     let data = [];
     let codeReader = null;
-    let activeZXingStream = false;
 
-    // Parser for your file format
     document.getElementById('datafile').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -79,7 +75,6 @@
       reader.readAsText(file);
     });
 
-    // UPC-E to UPC-A expansion (for codes starting with 0, standard parity)
     function upcEtoA(upce) {
       if (!/^\d{6}$/.test(upce)) return upce;
       const d = upce.split("");
@@ -166,32 +161,41 @@
       ).join('');
     }
 
-    // ZXing Scanner
-    document.getElementById('scan-btn').onclick = async function startScanZXing() {
-      // Stop any previous scan
+    document.getElementById('scan-btn').onclick = async function() {
+      const scanResult = document.getElementById('scan-result');
+      const video = document.getElementById('video');
+      scanResult.textContent = "";
+      video.style.display = "block";
+
+      // Stop previous streams if any
       if (codeReader) {
         try { codeReader.reset(); } catch (e) {}
       }
-      document.getElementById('scan-result').textContent = "";
-      const video = document.getElementById('video');
-      video.style.display = "block";
       codeReader = new ZXing.BrowserMultiFormatReader();
+
+      // Prompt error if not HTTPS
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        scanResult.textContent = "Camera access requires HTTPS (except on localhost).";
+        video.style.display = "none";
+        return;
+      }
+
       try {
         await codeReader.decodeFromVideoDevice(null, video, (result, err) => {
           if (result) {
-            document.getElementById('scan-result').textContent = "Scanned: " + result.text;
+            scanResult.textContent = "Scanned: " + result.text;
             video.style.display = "none";
             codeReader.reset();
             document.getElementById('searchtype').value = "upc";
             document.getElementById('search').value = result.text;
             search(result.text);
+          } else if (err && !(err instanceof ZXing.NotFoundException)) {
+            scanResult.textContent = "Scan error: " + err;
           }
         });
-        activeZXingStream = true;
       } catch (err) {
-        document.getElementById('scan-result').textContent = "Error: " + err;
+        scanResult.textContent = "Camera error: " + err;
         video.style.display = "none";
-        activeZXingStream = false;
       }
     };
   </script>
