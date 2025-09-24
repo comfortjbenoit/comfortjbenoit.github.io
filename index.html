@@ -10,6 +10,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
+<!-- dayjs for formatting date -->
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/advancedFormat.js"></script>
+<script>
+  dayjs.extend(window.dayjs_plugin_advancedFormat);
+</script>
+
 <style>
   :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; --accent:#0b69ff;}
   body{margin:0;background:#f6f8fb;color:#111}
@@ -83,8 +90,24 @@
     font-size:12px;
     margin:8px 0;
   }
-
-  /* MOBILE OVERRIDES */
+  #missingStoresCard {
+    background: #fffbe7;
+    border: 1px solid #f1c40f;
+    color: #c0392b;
+    margin: 0 0 18px 0;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 15px;
+  }
+  #missingStoresCard ul {
+    margin: 8px 0 0 0;
+    padding: 0 0 0 18px;
+  }
+  #missingStoresCard ul li {
+    font-family:monospace;
+    color: #c0392b;
+    font-size: 14px;
+  }
   body.mobile .wrap { max-width: 100vw; margin: 0; padding: 2vw;}
   body.mobile .row { flex-direction: column; gap: 0;}
   body.mobile .col.card { min-width: 0; padding: 10px;}
@@ -98,6 +121,7 @@
   body.mobile .list { max-height:140px;}
   body.mobile .actions { flex-direction:column;gap:4px;}
   body.mobile footer { font-size:12px;}
+  body.mobile #missingStoresCard { font-size:13px;padding:8px;}
   @media (max-width: 600px) {
     .wrap { padding: 2vw; }
     .row { flex-direction: column; gap: 0; }
@@ -112,6 +136,7 @@
     .list { max-height:140px;}
     .actions { flex-direction:column;gap:4px;}
     footer { font-size:12px;}
+    #missingStoresCard { font-size:13px;padding:8px;}
   }
 </style>
 </head>
@@ -122,6 +147,7 @@
 </header>
 
 <main class="wrap">
+  <div id="missingStoresCard" style="display:none"></div>
   <div class="row" style="align-items:flex-start">
     <div class="col card" style="max-width:420px">
       <label for="templateFile">Import Template File (Required, .xlsx/.csv)</label>
@@ -191,7 +217,6 @@
 function isMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
-// Set a class for mobile/desktop as soon as possible
 if (isMobileDevice()) {
   document.body.classList.add('mobile');
 } else {
@@ -200,7 +225,6 @@ if (isMobileDevice()) {
 
 const defaultStores = ["001","003","004","005","007","008","010","011","012","014","015","017","018","019","201","202","203","204","206","207","208","209","211","214","215","216","217"];
 const LS_KEY = "joeValadezInventoryStores";
-
 function loadKnownStores() {
   try {
     const saved = localStorage.getItem(LS_KEY);
@@ -215,8 +239,8 @@ let knownStores = loadKnownStores();
 
 let importedFiles = [];
 let aggregated = null;
-let inventoryGridState = null; // used for editing
-let templateRows = null; // Master template imported from template file
+let inventoryGridState = null;
+let templateRows = null;
 
 // UI refs
 const filesEl = document.getElementById('files');
@@ -230,6 +254,7 @@ const loadJsonBtn = document.getElementById('loadJsonBtn');
 const loadJsonFile = document.getElementById('loadJsonFile');
 const pdfFoilBtn = document.getElementById('pdfFoilBtn');
 const pdfInvBtn = document.getElementById('pdfInvBtn');
+const missingStoresCard = document.getElementById('missingStoresCard');
 
 // Template UI
 const templateFileEl = document.getElementById('templateFile');
@@ -246,7 +271,6 @@ const newStoreModal = document.getElementById('newStoreModal');
 const closeStoresModal = document.getElementById('closeStoresModal');
 const exportStoresModal = document.getElementById('exportStoresModal');
 
-// Stores modal logic
 function renderStoresModal(){
   storesModalList.innerHTML = '';
   Array.from(knownStores).sort().forEach(s=>{
@@ -264,7 +288,7 @@ function renderStoresModal(){
       knownStores.delete(b.dataset.store);
       saveKnownStores(knownStores);
       renderStoresModal();
-      if(aggregated) renderInventoryGrid(aggregated); // update grid
+      if(aggregated) renderInventoryGrid(aggregated);
     };
   });
 }
@@ -302,19 +326,17 @@ clearBtn.onclick = ()=>{
   importPreview.innerHTML = '';
   status('Cleared imported files.', 'ok');
   inventoryGrid.textContent = 'No inventory aggregated yet.';
+  missingStoresCard.style.display = 'none';
 };
 
-// Template import logic
 importTemplateBtn.onclick = async ()=>{
   const file = templateFileEl.files[0];
   if(!file){ templateStatus.textContent = 'No template file selected.'; templateStatus.style.color='#c0392b'; return; }
   try{
     const buffer = await file.arrayBuffer();
     const wb = XLSX.read(buffer, {type:'array'});
-    // Use first sheet for template
     const sheet = wb.Sheets[wb.SheetNames[0]];
     templateRows = [];
-    // A8:C44 (or all non-empty rows in columns A,B,C)
     for(let r=8;r<=44;r++){
       const pack = cellValue(sheet, 'A'+r);
       const size = cellValue(sheet, 'B'+r);
@@ -341,21 +363,21 @@ function status(txt, cls){
   statusEl.className = cls ? cls : '';
 }
 
-// --- AUTO IMPORT ON FILE CHOOSE ---
 filesEl.onchange = async ()=>{
   const list = filesEl.files;
   if(!list || list.length===0){ status('No files selected to import.', 'error'); return; }
   status('Importing files...');
   importedFiles = [];
+  // Track lastModified time for each file
   for(const f of list){
     try{
       const buffer = await f.arrayBuffer();
       const wb = XLSX.read(buffer, {type:'array'});
-      const entry = {name: f.name, workbook: wb, parsed: null, warnings: []};
+      const entry = {name: f.name, workbook: wb, parsed: null, warnings: [], lastModified: f.lastModified || 0};
       entry.parsed = parseWorkbook(wb);
       importedFiles.push(entry);
     } catch(err){
-      importedFiles.push({name:f.name, error:err.toString()});
+      importedFiles.push({name:f.name, error:err.toString(), lastModified: f.lastModified || 0});
       console.error('Import error', err);
     }
   }
@@ -373,7 +395,12 @@ function renderImportedPreview(){
       cont.innerHTML = `<span class="filename">${escapeHtml(it.name)}</span> <span class="error">Failed</span>`;
     } else {
       const p = it.parsed;
-      cont.innerHTML = `<span class="filename">${escapeHtml(it.name)}</span> <span class="store">${p.storeNumber||'—'}</span>`;
+      let dateStr = '';
+      if (it.lastModified) {
+        const d = new Date(it.lastModified);
+        dateStr = ` <span style="color:#999;font-size:11px;">(${d.toLocaleDateString()} ${d.toLocaleTimeString()})</span>`;
+      }
+      cont.innerHTML = `<span class="filename">${escapeHtml(it.name)}</span> <span class="store">${p.storeNumber||'—'}</span>${dateStr}`;
     }
     importPreview.appendChild(cont);
   });
@@ -443,34 +470,42 @@ function parseWorkbook(wb){
   return parsed;
 }
 
+// Helper to generate formatted date for filenames
+function getFormattedDateForFilename() {
+  return dayjs().format('YYYY-MM-DD');
+}
+
 // Aggregate imported files into final JSON using templateRows
 aggregateBtn.onclick = ()=>{
   if(importedFiles.length===0){ status('No imported files to aggregate.', 'error'); return; }
   if(!templateRows || templateRows.length===0){ status('No template imported. Please import template file.', 'error'); return; }
   let masterTemplate = templateRows;
-  // build aggregated data per store
-  const data = {};
-  for(const it of importedFiles){
-    if(it.error) continue;
-    const p = it.parsed;
-    const storeNum = p.storeNumber || guessStoreFromFilename(it.name) || null;
-    if(!storeNum){
-      status(`File ${it.name} missing store number (G3). It will be skipped from aggregated store data.`, 'error');
-      continue;
+  // --- Filter for unique stores, prefer latest file by lastModified ---
+  const storeMap = {};
+  importedFiles.forEach(it=>{
+    if(it.error || !it.parsed || !it.parsed.storeNumber) return;
+    const storeNum = it.parsed.storeNumber;
+    if (!storeMap[storeNum] || (it.lastModified > storeMap[storeNum].lastModified)) {
+      storeMap[storeNum] = it;
     }
+  });
+  const data = {};
+  Object.keys(storeMap).forEach(storeNum=>{
+    const it = storeMap[storeNum];
+    const p = it.parsed;
     if(!knownStores.has(storeNum)){
       p.warnings.push(`Store ${storeNum} not found in known store list. You may add it to include in master reports.`);
     }
-    // Ensure quantities length matches masterTemplate length
     const qty = p.quantities.slice(0, masterTemplate.length);
     while(qty.length < masterTemplate.length) qty.push(null);
     data[storeNum] = {
       storeNumber: storeNum,
       foil: p.foilItems.slice(0,4),
       quantities: qty,
-      sourceFile: it.name
+      sourceFile: it.name,
+      lastModified: it.lastModified
     };
-  }
+  });
   aggregated = {
     stores: Object.keys(data).sort(),
     knownStores: Array.from(knownStores).sort(),
@@ -480,9 +515,24 @@ aggregateBtn.onclick = ()=>{
     foilRange: {start:8,end:11}
   };
   renderInventoryGrid(aggregated);
+  showMissingStores(aggregated);
   status('Aggregated inventory ready.', 'ok');
   downloadJsonBtn.disabled = false;
 };
+
+function showMissingStores(agg){
+  if(!agg || !agg.knownStores || !agg.stores) {
+    missingStoresCard.style.display = 'none';
+    return;
+  }
+  const missing = agg.knownStores.filter(store=>!agg.stores.includes(store));
+  if(missing.length === 0){
+    missingStoresCard.style.display = 'none';
+    return;
+  }
+  missingStoresCard.style.display = '';
+  missingStoresCard.innerHTML = `<b>Stores missing in imported inventory:</b><ul>${missing.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ul>`;
+}
 
 function guessStoreFromFilename(name){
   const m = name.match(/(\d{3})/);
@@ -510,14 +560,98 @@ loadJsonFile.onchange = async (e)=>{
   try{
     aggregated = JSON.parse(text);
     renderInventoryGrid(aggregated);
+    showMissingStores(aggregated);
     status('Loaded JSON from file.', 'ok');
   } catch(err){
     status('Failed to parse JSON: '+err.toString(), 'error');
     inventoryGrid.textContent = 'No inventory aggregated yet.';
+    missingStoresCard.style.display = 'none';
   }
   e.target.value = '';
 };
 
+async function generateInventoryPDF(agg){
+  if(!agg){ status('No aggregated data available for PDF.', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'landscape'});
+
+  const marginLeft = 18;
+  const titleY = 45;
+  const dateY = 45;
+  doc.setFontSize(16);
+  doc.setTextColor(0,0,0);
+  doc.setFont(undefined,'bold');
+  doc.text('Joe Valadez Inventory', marginLeft, titleY);
+
+  // Date on top right, custom format
+  const dateStr = dayjs().format('dddd, MMM D, YYYY');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFontSize(10);
+  doc.setFont(undefined,'normal');
+  doc.text(dateStr, pageWidth - marginLeft, dateY, { align: 'right' });
+
+  let y = titleY + 20;
+
+  const stores = agg.stores.length ? agg.stores : agg.knownStores;
+  const header = ['Description, Size', ...stores, 'Total'];
+  const rows = [];
+  const template = agg.templateItems || [];
+  const descColWidth = 120;
+
+  template.forEach((t, idx)=>{
+    let desc = t.description || '';
+    const size = t.size || '';
+    // TRIM ONLY THE DESCRIPTION TO 20 CHARACTERS, THEN ADD SIZE
+    let trimmedDesc = desc.length > 20 ? desc.substring(0, 20) : desc;
+    let combined = size ? `${trimmedDesc}, ${size}` : trimmedDesc;
+    const row = [combined];
+    let total = 0;
+    stores.forEach(s=>{
+      const entry = agg.data && agg.data[s] ? agg.data[s] : null;
+      const q = entry && entry.quantities && entry.quantities[idx]!==undefined ? entry.quantities[idx] : 0;
+      const val = q===null||q===undefined ? 0 : Number(q);
+      row.push(val);
+      if(!isNaN(val)) total += val;
+    });
+    row.push(total);
+    rows.push(row);
+  });
+
+  doc.autoTable({
+    head: [header],
+    body: rows,
+    startY: y,
+    styles: {
+      fontSize:8,
+      cellPadding:3,
+      halign:'center',
+      valign:'middle',
+      textColor:[0,0,0],
+      cellWidth: 'auto',
+      minCellHeight: 16,
+      overflow: 'linebreak',
+    },
+    headStyles: { fillColor: [230,235,255], textColor:[0,0,0], halign:'center' },
+    columnStyles: {
+      0: { halign:'left', cellWidth: descColWidth },
+      [header.length-1]: { fontStyle:'bold' }
+    },
+    margin: { left: marginLeft, right: marginLeft },
+    tableWidth: 'auto'
+  });
+
+  // Append date to file name
+  const filename = `Joe Valadez Inventory ${getFormattedDateForFilename()}.pdf`;
+  doc.save(filename);
+  status(`Inventory PDF generated (${filename}).`, 'ok');
+}
+
+pdfInvBtn.onclick = ()=> {
+  if(!aggregated){ status('No aggregated JSON — aggregate or load JSON file first.', 'error'); return; }
+  generateInventoryPDF(aggregated);
+};
+
+// Foil PDF with date in filename
 async function generateFoilPDF(agg){
   if(!agg) { status('No aggregated data available for PDF.', 'error'); return; }
   const { jsPDF } = window.jspdf;
@@ -547,91 +681,19 @@ async function generateFoilPDF(agg){
     styles: { fontSize:10, cellPadding:4 },
     margin: { left: margin, right: margin }
   });
-  doc.save('foil_pan_order.pdf');
-  status('Foil pan PDF generated.', 'ok');
-}
-
-async function generateInventoryPDF(agg){
-  if(!agg){ status('No aggregated data available for PDF.', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'landscape'});
-  const marginLeft = 18;
-  const marginTop = 15;
-  let y = marginTop;
-  doc.setFontSize(16);
-  doc.setTextColor(0,0,0);
-  doc.setFont(undefined,'bold');
-  doc.text('Joe Valadez Inventory', marginLeft, y);
-  const dateStr = new Date().toLocaleDateString();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  doc.setFontSize(10);
-  doc.setFont(undefined,'normal');
-  doc.text(dateStr, pageWidth - marginLeft, y, { align: 'right' });
-  y += 18;
-  const stores = agg.stores.length ? agg.stores : agg.knownStores;
-  const header = ['Description, Size', ...stores, 'Total'];
-  const rows = [];
-  const template = agg.templateItems || [];
-  const descColWidth = 120;
-  template.forEach((t, idx)=>{
-    let desc = t.description || '';
-    const size = t.size || '';
-    const combined = size ? `${desc}, ${size}` : desc;
-    let text = combined;
-    doc.setFontSize(8);
-    doc.setFont(undefined,'normal');
-    while(doc.getTextWidth(text) > descColWidth){
-      if(desc.length === 0) break;
-      desc = desc.slice(0, -1);
-      text = size ? `${desc}, ${size}` : desc;
-    }
-    const row = [text];
-    let total = 0;
-    stores.forEach(s=>{
-      const entry = agg.data && agg.data[s] ? agg.data[s] : null;
-      const q = entry && entry.quantities && entry.quantities[idx]!==undefined ? entry.quantities[idx] : 0;
-      const val = q===null||q===undefined ? 0 : Number(q);
-      row.push(val);
-      if(!isNaN(val)) total += val;
-    });
-    row.push(total);
-    rows.push(row);
-  });
-  doc.autoTable({
-    head: [header],
-    body: rows,
-    startY: y,
-    styles: {
-      fontSize:8,
-      cellPadding:3,
-      halign:'center',
-      valign:'middle',
-      textColor:[0,0,0]
-    },
-    headStyles: { fillColor: [230,235,255], textColor:[0,0,0], halign:'center' },
-    columnStyles: {
-      0: { halign:'left', cellWidth: descColWidth },
-      [header.length-1]: { fontStyle:'bold' }
-    },
-    margin: { left: marginLeft, right: marginLeft },
-    tableWidth: 'auto'
-  });
-  doc.save('Joe Valadez Inventory.pdf');
-  status('Inventory PDF generated (landscape, description trimmed to one line, totals bold).', 'ok');
+  // Append date to file name
+  const filename = `foil_pan_order_${getFormattedDateForFilename()}.pdf`;
+  doc.save(filename);
+  status(`Foil pan PDF generated (${filename}).`, 'ok');
 }
 
 pdfFoilBtn.onclick = ()=> {
   if(!aggregated){ status('No aggregated JSON — aggregate or load JSON file first.', 'error'); return; }
   generateFoilPDF(aggregated);
 };
-pdfInvBtn.onclick = ()=> {
-  if(!aggregated){ status('No aggregated JSON — aggregate or load JSON file first.', 'error'); return; }
-  generateInventoryPDF(aggregated);
-};
 
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// Render inventory grid as interactive HTML table
 function renderInventoryGrid(agg){
   if(!agg || !agg.templateItems || !agg.stores || !agg.data){
     inventoryGrid.textContent = 'No inventory aggregated yet.';
@@ -662,23 +724,18 @@ function renderInventoryGrid(agg){
     });
   });
 
-  // Save state for editing
   inventoryGridState = {agg, stores, template, rows, colWidths};
 
-  // Build grid as HTML table for interactivity
   let html = '<table style="width:100%;border-collapse:collapse;font-family:inherit;font-size:13px;background:#0f1724;color:#e6f0ff;">';
-  // Header
   html += '<thead><tr>';
   header.forEach((h,i)=>{
     html += `<th style="background:#23304e;color:#fff;border:1px solid #23304e;padding:6px;">${escapeHtml(h)}</th>`;
   });
   html += '</tr></thead>';
-  // Rows
   html += '<tbody>';
   rows.forEach((row,ridx)=>{
     html += '<tr>';
     row.forEach((cell,cidx)=>{
-      // Only inventory cells are editable (exclude description and total columns)
       if(cidx>0 && cidx<row.length-1){
         html += `<td style="border:1px solid #23304e;padding:6px;text-align:right;cursor:pointer;" data-row="${ridx}" data-col="${cidx}" class="editable-cell">${escapeHtml(cell)}</td>`;
       } else {
@@ -690,10 +747,9 @@ function renderInventoryGrid(agg){
   html += '</tbody></table>';
   inventoryGrid.innerHTML = html;
 
-  // Attach editing logic
   inventoryGrid.querySelectorAll('.editable-cell').forEach(td=>{
     td.onclick = function(e){
-      if(td.querySelector('input')) return; // already editing
+      if(td.querySelector('input')) return;
       const origVal = td.textContent;
       td.innerHTML = `<input type="number" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(origVal)}" style="width:60px;" class="cell-editing" />`;
       const inp = td.querySelector('input');
@@ -709,22 +765,19 @@ function renderInventoryGrid(agg){
         if(val==='' || isNaN(val)) val = '';
         td.innerHTML = escapeHtml(val);
         td.classList.remove('cell-editing');
-        // Update inventoryGridState and aggregated
         const row = Number(td.dataset.row);
         const col = Number(td.dataset.col);
-        const storeIdx = col-1; // because first col is description
+        const storeIdx = col-1;
         const store = inventoryGridState.stores[storeIdx];
         if(aggregated && aggregated.data && aggregated.data[store]) {
           aggregated.data[store].quantities[row] = (val===''?null:Number(val));
-          // update total column
           renderInventoryGrid(aggregated);
+          showMissingStores(aggregated);
         }
       };
     };
   });
 }
-
-// Show mobile tip if on mobile
 window.addEventListener('DOMContentLoaded', function() {
   if(document.body.classList.contains('mobile')) {
     setTimeout(function(){
