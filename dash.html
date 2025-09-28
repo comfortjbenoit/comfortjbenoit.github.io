@@ -1,540 +1,479 @@
-import React, { useEffect, useMemo, useState } from "react";
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Intranet Dashboard</title>
+  <meta name="theme-color" content="#111827" />
+  <!-- Normalize & Tailwind (no build tools needed) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { borderRadius: { '2xl': '1rem' }}}};
+  </script>
+  <style>
+    html, body { height: 100%; background: #f8fafc; }
+    .aspect-video { position: relative; padding-top: calc(9/16 * 100%); }
+    .aspect-video > iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .container { max-width: 72rem; margin-left: auto; margin-right: auto; padding-left: 1rem; padding-right: 1rem; }
+    @media (min-width: 640px){ .container { padding-left: 1.5rem; padding-right: 1.5rem; } }
+    @media (min-width: 1024px){ .container { padding-left: 2rem; padding-right: 2rem; } }
+  </style>
+</head>
+<body class="min-h-screen">
 
-// --- SIMPLE HASH ROUTER ---
-function useHashRoute(defaultPath = "#/") {
-  const [hash, setHash] = useState(window.location.hash || defaultPath);
-  useEffect(() => {
-    const onHashChange = () => setHash(window.location.hash || defaultPath);
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, [defaultPath]);
-  return hash.replace(/^#/, "");
-}
-
-// --- PERSISTENCE (localStorage) ---
-const LS_KEY = "intranet_dashboard_config_v1";
-const defaultConfig = {
-  orgName: "Food Town Intranet",
-  homeCenter: { lat: 29.6658, lon: -95.0194, zoom: 10 }, // La Porte, TX default
-  sections: {
-    reports: [],
-    manuals: [],
-    planograms: [],
-    corporate: [],
-    store: [],
-    booth: [],
-    scan: [],
-    receiving: [],
-  },
-  // EBT: map of YYYY-MM => [1, 2, 15, ...]
-  ebtDaysByMonth: {},
-};
-
-function loadConfig() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return defaultConfig;
-    const parsed = JSON.parse(raw);
-    return { ...defaultConfig, ...parsed };
-  } catch {
-    return defaultConfig;
-  }
-}
-
-function saveConfig(cfg) {
-  localStorage.setItem(LS_KEY, JSON.stringify(cfg));
-}
-
-// --- UI PRIMITIVES ---
-function Container({ children }) {
-  return <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>;
-}
-
-function Card({ title, actions, children, className = "" }) {
-  return (
-    <div className={`bg-white shadow-sm rounded-2xl p-5 border border-gray-100 ${className}`}>
-      {(title || actions) && (
-        <div className="flex items-center justify-between mb-3">
-          {title && <h3 className="text-lg font-semibold text-gray-800">{title}</h3>}
-          {actions}
+  <!-- Top Nav -->
+  <div class="bg-white border-b border-gray-200">
+    <div class="container">
+      <div class="flex items-center gap-4 py-4">
+        <div class="flex items-center gap-2">
+          <div class="h-9 w-9 rounded-xl bg-gray-900 text-white flex items-center justify-center font-bold">FT</div>
+          <div id="orgName" class="text-xl font-semibold text-gray-900">Food Town Intranet</div>
         </div>
-      )}
-      {children}
-    </div>
-  );
-}
-
-function Chip({ children }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-gray-300 px-2.5 py-0.5 text-xs font-medium text-gray-700">
-      {children}
-    </span>
-  );
-}
-
-function Button({ children, onClick, variant = "solid", size = "md", className = "", type = "button" }) {
-  const base = "inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2";
-  const sizes = {
-    sm: "text-sm px-3 py-1.5",
-    md: "text-sm px-4 py-2",
-    lg: "text-base px-5 py-2.5",
-  };
-  const variants = {
-    solid: "bg-gray-900 text-white hover:bg-gray-800 focus:ring-gray-900",
-    ghost: "bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-300",
-    outline: "border border-gray-300 text-gray-800 hover:bg-gray-50 focus:ring-gray-300",
-  };
-  return (
-    <button type={type} onClick={onClick} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}>
-      {children}
-    </button>
-  );
-}
-
-// --- NAV ---
-const NAV_ITEMS = [
-  { path: "/", label: "Dashboard" },
-  { path: "/reports", label: "Reports" },
-  { path: "/manuals", label: "Manuals" },
-  { path: "/planograms", label: "Planograms" },
-  { path: "/corporate", label: "Corporate" },
-  { path: "/store", label: "Store" },
-  { path: "/booth", label: "Booth" },
-  { path: "/scan", label: "Scan" },
-  { path: "/receiving", label: "Receiving" },
-];
-
-function TopNav({ orgName }) {
-  return (
-    <div className="bg-white border-b border-gray-200">
-      <Container>
-        <div className="flex items-center gap-4 py-4">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-gray-900 text-white flex items-center justify-center font-bold">FT</div>
-            <div className="text-xl font-semibold text-gray-900">{orgName}</div>
-          </div>
-          <nav className="ml-auto hidden md:flex gap-2">
-            {NAV_ITEMS.map((item) => (
-              <a key={item.path} href={`#${item.path}`} className="px-3 py-2 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100">
-                {item.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-      </Container>
-    </div>
-  );
-}
-
-function MobileTabs() {
-  return (
-    <div className="md:hidden sticky bottom-0 inset-x-0 bg-white border-t border-gray-200 p-2 flex justify-between">
-      {NAV_ITEMS.map((item) => (
-        <a key={item.path} href={`#${item.path}`} className="flex-1 text-center text-xs font-medium text-gray-700 py-2 hover:bg-gray-100 rounded-lg">
-          {item.label}
-        </a>
-      ))}
-    </div>
-  );
-}
-
-// --- UTIL ---
-function yyyymm(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function daysInMonth(year, monthIndex /* 0-11 */) {
-  return new Date(year, monthIndex + 1, 0).getDate();
-}
-
-function getMonthGrid(year, monthIndex) {
-  const firstDay = new Date(year, monthIndex, 1);
-  const startWeekday = firstDay.getDay(); // 0=Sun
-  const totalDays = daysInMonth(year, monthIndex);
-  const cells = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let d = 1; d <= totalDays; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-  return cells;
-}
-
-// Weather code -> emoji-ish indicator
-const WCODE = {
-  0: "☀️",
-  1: "🌤️",
-  2: "⛅",
-  3: "☁️",
-  45: "🌫️",
-  48: "🌫️",
-  51: "🌦️",
-  53: "🌦️",
-  55: "🌧️",
-  61: "🌧️",
-  63: "🌧️",
-  65: "🌧️",
-  71: "🌨️",
-  73: "🌨️",
-  75: "❄️",
-  80: "🌧️",
-  81: "🌧️",
-  82: "⛈️",
-  95: "⛈️",
-  96: "⛈️",
-  99: "⛈️",
-};
-
-// --- COMPONENTS ---
-function EBTCalendar({ config, onUpdate }) {
-  const now = new Date();
-  const key = yyyymm(now);
-  const year = now.getFullYear();
-  const monthIndex = now.getMonth();
-  const selectedDays = new Set(config.ebtDaysByMonth[key] || []);
-  const cells = getMonthGrid(year, monthIndex);
-
-  const onQuickEdit = () => {
-    const current = (config.ebtDaysByMonth[key] || []).join(", ");
-    const input = prompt(`EBT activation days for ${key} (comma-separated day numbers)`, current);
-    if (input === null) return;
-    const days = input
-      .split(/[,\s]+/)
-      .map((v) => parseInt(v, 10))
-      .filter((n) => Number.isFinite(n) && n >= 1 && n <= daysInMonth(year, monthIndex));
-    const next = { ...config, ebtDaysByMonth: { ...config.ebtDaysByMonth, [key]: Array.from(new Set(days)).sort((a, b) => a - b) } };
-    saveConfig(next);
-    onUpdate(next);
-  };
-
-  const monthName = now.toLocaleString(undefined, { month: "long" });
-
-  return (
-    <Card
-      title={`EBT Activation Days — ${monthName} ${year}`}
-      actions={<Button variant="outline" size="sm" onClick={onQuickEdit}>Edit</Button>}
-      className="h-full"
-    >
-      <div className="grid grid-cols-7 gap-2 text-xs text-gray-600">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="text-center font-semibold text-gray-700">{d}</div>
-        ))}
-        {cells.map((day, idx) => {
-          const isSel = day != null && selectedDays.has(day);
-          return (
-            <div
-              key={idx}
-              className={`aspect-square rounded-xl border flex items-center justify-center ${
-                day == null
-                  ? "bg-gray-50 border-gray-100"
-                  : isSel
-                  ? "bg-emerald-100 border-emerald-300 text-emerald-900 font-semibold"
-                  : "bg-white border-gray-200 text-gray-900"
-              }`}
-            >
-              {day || ""}
-            </div>
-          );
-        })}
+        <nav class="ml-auto hidden md:flex gap-2" id="topNav"></nav>
       </div>
-      {selectedDays.size === 0 && (
-        <p className="text-sm text-gray-500 mt-3">
-          No days set yet. Click <span className="font-medium">Edit</span> to add activation days for this month.
-        </p>
-      )}
-    </Card>
-  );
-}
-
-function WeatherNow({ coords }) {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState(null);
-
-  useEffect(() => {
-    async function run() {
-      if (!coords) return;
-      try {
-        const url = new URL("https://api.open-meteo.com/v1/forecast");
-        url.searchParams.set("latitude", coords.lat);
-        url.searchParams.set("longitude", coords.lon);
-        url.searchParams.set("hourly", "temperature_2m,precipitation,weathercode");
-        url.searchParams.set("current_weather", "true");
-        url.searchParams.set("temperature_unit", "fahrenheit");
-        url.searchParams.set("timezone", "auto");
-        const res = await fetch(url.toString());
-        const json = await res.json();
-        setData(json);
-      } catch (e) {
-        setErr(String(e));
-      }
-    }
-    run();
-  }, [coords]);
-
-  if (!coords) return <Card title="Local Weather"><p className="text-sm text-gray-500">Locating…</p></Card>;
-  if (err) return <Card title="Local Weather"><p className="text-sm text-red-600">{err}</p></Card>;
-  if (!data) return <Card title="Local Weather"><p className="text-sm text-gray-500">Loading forecast…</p></Card>;
-
-  const cw = data.current_weather;
-  const hours = data.hourly?.time?.map((t, i) => ({
-    time: t,
-    temp: data.hourly.temperature_2m[i],
-    wcode: data.hourly.weathercode[i],
-    precip: data.hourly.precipitation[i],
-  })) || [];
-  const nowIso = new Date().toISOString().slice(0, 13);
-  const upcoming = hours.filter((h) => h.time.slice(0, 13) >= nowIso).slice(0, 12);
-
-  return (
-    <Card
-      title={
-        <div className="flex items-center gap-3">
-          <span>Local Weather</span>
-          <Chip>{coords.lat.toFixed(3)}, {coords.lon.toFixed(3)}</Chip>
-        </div>
-      }
-    >
-      {cw && (
-        <div className="flex items-center gap-6 mb-4">
-          <div className="text-4xl">{WCODE[cw.weathercode] || ""}</div>
-          <div>
-            <div className="text-2xl font-semibold">{Math.round(cw.temperature)}°F</div>
-            <div className="text-sm text-gray-600">Wind {Math.round(cw.windspeed)} mph</div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        {upcoming.map((h) => {
-          const dt = new Date(h.time);
-          const label = dt.toLocaleTimeString([], { hour: "numeric" });
-          const icon = WCODE[h.wcode] || "";
-          return (
-            <div key={h.time} className="rounded-xl border border-gray-200 p-3 text-center">
-              <div className="text-xs text-gray-500 mb-1">{label}</div>
-              <div className="text-xl">{icon}</div>
-              <div className="font-semibold">{Math.round(h.temp)}°</div>
-              <div className="text-xs text-gray-500">{h.precip ? `${h.precip} mm` : "—"}</div>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-function LiveMaps({ coords, center }) {
-  const lat = coords?.lat ?? center.lat;
-  const lon = coords?.lon ?? center.lon;
-  const wazeSrc = `https://embed.waze.com/iframe?zoom=12&lat=${lat}&lon=${lon}&pin=1`;
-  const windySrc = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&zoom=7&level=surface&overlay=radar&menu=&message=true&marker=&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat=${lat}&detailLon=${lon}&metricWind=mph&metricTemp=%C2%B0F`;
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      <Card title="Live Traffic (Waze)">
-        <div className="aspect-video rounded-xl overflow-hidden border">
-          <iframe title="Waze Live Map" src={wazeSrc} className="w-full h-full" allowFullScreen />
-        </div>
-      </Card>
-      <Card title="Weather Radar (Windy)">
-        <div className="aspect-video rounded-xl overflow-hidden border">
-          <iframe title="Windy Radar" src={windySrc} className="w-full h-full" loading="lazy" />
-        </div>
-      </Card>
     </div>
-  );
-}
+  </div>
 
-function LinkGrid({ items, title, onAdd }) {
-  return (
-    <Card
-      title={title}
-      actions={
-        <Button variant="outline" size="sm" onClick={onAdd}>Add Link</Button>
-      }
-    >
-      {items.length === 0 ? (
-        <p className="text-sm text-gray-500">No links yet. Use “Add Link” to populate this section.</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((it, idx) => (
-            <a key={idx} href={it.href} target="_blank" rel="noreferrer" className="group block rounded-2xl border border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-gray-100 group-hover:bg-gray-200 font-semibold text-gray-700">
-                  {it.icon || "🔗"}
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">{it.title}</div>
-                  {it.desc && <div className="text-sm text-gray-600">{it.desc}</div>}
-                </div>
-              </div>
-            </a>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
+  <!-- Location banner -->
+  <div id="locBanner" class="hidden bg-amber-50 border-b border-amber-200">
+    <div class="container"><div class="py-2 text-sm text-amber-900" id="locMsg"></div></div>
+  </div>
 
-function SectionPage({ name, title, config, setConfig }) {
-  const items = config.sections[name] || [];
-  const addLink = () => {
-    const title = prompt("Link title");
-    if (!title) return;
-    const href = prompt("URL (https://…)");
-    if (!href) return;
-    const desc = prompt("Optional description (shown under title)") || "";
-    const icon = prompt("Optional emoji/icon (e.g. 📊, 📄, 🗂️)") || "";
-    const next = { ...config, sections: { ...config.sections, [name]: [...items, { title, href, desc, icon }] } };
-    saveConfig(next);
-    setConfig(next);
-  };
-  return (
-    <Container>
-      <div className="py-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-          <Button variant="ghost" onClick={() => exportConfig(config)}>Export Config</Button>
-        </div>
-        <LinkGrid items={items} title={title} onAdd={addLink} />
+  <!-- Main -->
+  <main class="container">
+    <div id="app" class="py-6"></div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-10 border-t border-gray-200 bg-white">
+    <div class="container">
+      <div class="py-4 text-xs text-gray-500 flex items-center justify-between">
+        <div>© <span id="year"></span> <span id="orgNameFooter">Food Town Intranet</span></div>
+        <div id="footerLinks" class="flex items-center gap-3"></div>
       </div>
-    </Container>
-  );
-}
+    </div>
+  </footer>
 
-function exportConfig(cfg) {
-  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "intranet-dashboard-config.json";
-  a.click();
-  URL.revokeObjectURL(url);
-}
+  <!-- Mobile tabs -->
+  <div class="md:hidden sticky bottom-0 inset-x-0 bg-white border-t border-gray-200 p-2 flex justify-between z-10" id="mobileTabs"></div>
 
-function importConfig(setConfig) {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "application/json";
-  input.onchange = () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const json = JSON.parse(String(reader.result));
-        saveConfig(json);
-        setConfig(json);
-      } catch (e) {
-        alert("Invalid config file: " + e);
-      }
+  <script>
+    /**************
+     * CONFIG + PERSISTENCE
+     **************/
+    const NAV_ITEMS = [
+      { path: '/', label: 'Dashboard' },
+      { path: '/reports', label: 'Reports' },
+      { path: '/manuals', label: 'Manuals' },
+      { path: '/planograms', label: 'Planograms' },
+      { path: '/corporate', label: 'Corporate' },
+      { path: '/store', label: 'Store' },
+      { path: '/booth', label: 'Booth' },
+      { path: '/scan', label: 'Scan' },
+      { path: '/receiving', label: 'Receiving' },
+    ];
+    const LS_KEY = 'intranet_dashboard_config_v1';
+    const defaultConfig = {
+      orgName: 'Food Town Intranet',
+      homeCenter: { lat: 29.6658, lon: -95.0194, zoom: 10 }, // La Porte, TX default
+      sections: { reports: [], manuals: [], planograms: [], corporate: [], store: [], booth: [], scan: [], receiving: [] },
+      // EBT days keyed by 'YYYY-MM' => [1,2,3,...]
+      ebtDaysByMonth: {},
     };
-    reader.readAsText(file);
-  };
-  input.click();
-}
-
-function Dashboard({ config, setConfig, coords }) {
-  return (
-    <Container>
-      <div className="py-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-            <p className="text-sm text-gray-600">Live traffic & weather, plus this month’s EBT activation days.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => importConfig(setConfig)}>Import</Button>
-            <Button variant="ghost" onClick={() => exportConfig(config)}>Export</Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-1"><EBTCalendar config={config} onUpdate={setConfig} /></div>
-          <div className="lg:col-span-2"><LiveMaps coords={coords} center={config.homeCenter} /></div>
-        </div>
-
-        <WeatherNow coords={coords} />
-      </div>
-    </Container>
-  );
-}
-
-// --- ROOT APP ---
-export default function App() {
-  const route = useHashRoute();
-  const [config, setConfig] = useState(loadConfig());
-  const [coords, setCoords] = useState(null);
-  const [locMsg, setLocMsg] = useState("Locating…");
-
-  // Attempt browser geolocation first
-  useEffect(() => {
-    if (!("geolocation" in navigator)) {
-      setLocMsg("Geolocation not supported. Using default center.");
-      setCoords({ lat: config.homeCenter.lat, lon: config.homeCenter.lon });
-      return;
+    function loadConfig() {
+      try { return { ...defaultConfig, ...(JSON.parse(localStorage.getItem(LS_KEY)) || {}) }; }
+      catch { return defaultConfig; }
     }
-    const t = setTimeout(() => setLocMsg("If location prompt is blocked, we’ll use the default center."), 4000);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clearTimeout(t);
-        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-        setLocMsg("");
-      },
-      () => {
-        clearTimeout(t);
-        setLocMsg("Using default center.");
-        setCoords({ lat: config.homeCenter.lat, lon: config.homeCenter.lon });
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 }
-    );
-  }, []);
+    function saveConfig(cfg) { localStorage.setItem(LS_KEY, JSON.stringify(cfg)); }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Tailwind CDN */}
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" />
-      <script src="https://cdn.tailwindcss.com"></script>
+    let CONFIG = loadConfig();
 
-      <TopNav orgName={config.orgName} />
+    /**************
+     * UTIL
+     **************/
+    const $ = (sel) => document.querySelector(sel);
+    const el = (tag, cls, html) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (html != null) e.innerHTML = html;
+      return e;
+    };
+    function setHash(path){ if (location.hash !== '#' + path) location.hash = '#' + path; }
+    function getRoute(){ return (location.hash || '#/').slice(1); }
+    function yyyymm(d = new Date()){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+    function daysInMonth(y, m){ return new Date(y, m+1, 0).getDate(); }
+    function getMonthGrid(y, m){
+      const first = new Date(y, m, 1), start = first.getDay(), total = daysInMonth(y, m), cells = [];
+      for (let i=0;i<start;i++) cells.push(null);
+      for (let d=1; d<=total; d++) cells.push(d);
+      while (cells.length % 7) cells.push(null);
+      return cells;
+    }
+    function exportConfig(cfg){
+      const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'intranet-dashboard-config.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function importConfig(){
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      input.onchange = () => {
+        const file = input.files?.[0]; if (!file) return;
+        const r = new FileReader();
+        r.onload = () => {
+          try { CONFIG = { ...defaultConfig, ...JSON.parse(String(r.result)) }; saveConfig(CONFIG); renderAll(); }
+          catch(e){ alert('Invalid config: ' + e); }
+        };
+        r.readAsText(file);
+      };
+      input.click();
+    }
 
-      {locMsg && (
-        <div className="bg-amber-50 border-b border-amber-200">
-          <Container>
-            <div className="py-2 text-sm text-amber-900">{locMsg}</div>
-          </Container>
-        </div>
-      )}
+    /**************
+     * WEATHER (Open-Meteo)
+     **************/
+    const WCODE = { 0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌧️',63:'🌧️',65:'🌧️',71:'🌨️',73:'🌨️',75:'❄️',80:'🌧️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️' };
 
-      {route === "/" && <Dashboard config={config} setConfig={setConfig} coords={coords} />}
-      {route === "/reports" && <SectionPage name="reports" title="Reports" config={config} setConfig={setConfig} />}
-      {route === "/manuals" && <SectionPage name="manuals" title="Manuals" config={config} setConfig={setConfig} />}
-      {route === "/planograms" && <SectionPage name="planograms" title="Planograms" config={config} setConfig={setConfig} />}
-      {route === "/corporate" && <SectionPage name="corporate" title="Corporate" config={config} setConfig={setConfig} />}
-      {route === "/store" && <SectionPage name="store" title="Store" config={config} setConfig={setConfig} />}
-      {route === "/booth" && <SectionPage name="booth" title="Booth" config={config} setConfig={setConfig} />}
-      {route === "/scan" && <SectionPage name="scan" title="Scan" config={config} setConfig={setConfig} />}
-      {route === "/receiving" && <SectionPage name="receiving" title="Receiving" config={config} setConfig={setConfig} />}
+    async function fetchForecast(lat, lon){
+      const url = new URL('https://api.open-meteo.com/v1/forecast');
+      url.searchParams.set('latitude', lat);
+      url.searchParams.set('longitude', lon);
+      url.searchParams.set('hourly', 'temperature_2m,precipitation,weathercode');
+      url.searchParams.set('current_weather', 'true');
+      url.searchParams.set('temperature_unit', 'fahrenheit');
+      url.searchParams.set('timezone', 'auto');
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error('Weather fetch failed');
+      return res.json();
+    }
 
-      <MobileTabs />
+    function renderWeather(container, coords){
+      container.innerHTML = '';
+      const card = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
+      const title = el('div','flex items-center gap-3 mb-3');
+      title.innerHTML = `<h3 class="text-lg font-semibold text-gray-800">Local Weather</h3>` +
+                        (coords ? `<span class="inline-flex items-center rounded-full border border-gray-300 px-2.5 py-0.5 text-xs font-medium text-gray-700">${coords.lat.toFixed(3)}, ${coords.lon.toFixed(3)}</span>` : '');
+      card.appendChild(title);
 
-      {/* Footer */}
-      <footer className="mt-10 border-t border-gray-200 bg-white">
-        <Container>
-          <div className="py-4 text-xs text-gray-500 flex items-center justify-between">
-            <div>© {new Date().getFullYear()} {config.orgName}</div>
-            <div className="flex items-center gap-3">
-              <a href="#/" className="hover:underline">Dashboard</a>
-              <a href="#/reports" className="hover:underline">Reports</a>
-              <a href="#/manuals" className="hover:underline">Manuals</a>
-              <a href="#/planograms" className="hover:underline">Planograms</a>
-              <a href="#/corporate" className="hover:underline">Corporate</a>
-              <a href="#/store" className="hover:underline">Store</a>
-              <a href="#/booth" className="hover:underline">Booth</a>
-              <a href="#/scan" className="hover:underline">Scan</a>
-              <a href="#/receiving" className="hover:underline">Receiving</a>
-            </div>
-          </div>
-        </Container>
-      </footer>
-    </div>
-  );
-}
+      const status = el('p','text-sm text-gray-500','Loading forecast…');
+      card.appendChild(status);
+      container.appendChild(card);
+
+      if (!coords){ status.textContent = 'Locating…'; return; }
+
+      fetchForecast(coords.lat, coords.lon).then(data => {
+        status.remove();
+
+        const cw = data.current_weather;
+        if (cw){
+          const header = el('div','flex items-center gap-6 mb-4');
+          header.innerHTML = `
+            <div class="text-4xl">${WCODE[cw.weathercode] || ''}</div>
+            <div>
+              <div class="text-2xl font-semibold">${Math.round(cw.temperature)}°F</div>
+              <div class="text-sm text-gray-600">Wind ${Math.round(cw.windspeed)} mph</div>
+            </div>`;
+          card.appendChild(header);
+        }
+
+        const grid = el('div','grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3');
+        const hours = (data.hourly?.time || []).map((t,i)=>({
+          time: t,
+          temp: data.hourly.temperature_2m[i],
+          wcode: data.hourly.weathercode[i],
+          precip: data.hourly.precipitation[i],
+        }));
+        const nowIso = new Date().toISOString().slice(0,13);
+        const upcoming = hours.filter(h => h.time.slice(0,13) >= nowIso).slice(0,12);
+        for (const h of upcoming){
+          const dt = new Date(h.time);
+          const label = dt.toLocaleTimeString([], { hour: 'numeric' });
+          const cell = el('div','rounded-xl border border-gray-200 p-3 text-center');
+          cell.innerHTML = `
+            <div class="text-xs text-gray-500 mb-1">${label}</div>
+            <div class="text-xl">${WCODE[h.wcode] || ''}</div>
+            <div class="font-semibold">${Math.round(h.temp)}°</div>
+            <div class="text-xs text-gray-500">${h.precip ? `${h.precip} mm` : '—'}</div>`;
+          grid.appendChild(cell);
+        }
+        card.appendChild(grid);
+      }).catch(e => {
+        status.className = 'text-sm text-red-600';
+        status.textContent = String(e);
+      });
+    }
+
+    /**************
+     * LIVE MAPS (Waze + Windy embeds)
+     **************/
+    function renderLiveMaps(container, coords, center){
+      container.innerHTML = '';
+      const lat = coords?.lat ?? center.lat;
+      const lon = coords?.lon ?? center.lon;
+      const wazeSrc = `https://embed.waze.com/iframe?zoom=12&lat=${lat}&lon=${lon}&pin=1`;
+      const windySrc = `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&zoom=7&level=surface&overlay=radar&menu=&message=true&marker=&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat=${lat}&detailLon=${lon}&metricWind=mph&metricTemp=%C2%B0F`;
+
+      const grid = el('div','grid grid-cols-1 lg:grid-cols-2 gap-5');
+
+      const traffic = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
+      traffic.innerHTML = `<div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Live Traffic (Waze)</h3></div>
+                           <div class="aspect-video rounded-xl overflow-hidden border"><iframe title="Waze" src="${wazeSrc}" allowfullscreen></iframe></div>`;
+      grid.appendChild(traffic);
+
+      const radar = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
+      radar.innerHTML = `<div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Weather Radar (Windy)</h3></div>
+                         <div class="aspect-video rounded-xl overflow-hidden border"><iframe title="Windy" src="${windySrc}" loading="lazy"></iframe></div>`;
+      grid.appendChild(radar);
+
+      container.appendChild(grid);
+    }
+
+    /**************
+     * EBT CALENDAR
+     **************/
+    function renderEBTCalendar(container){
+      const now = new Date();
+      const key = yyyymm(now);
+      const y = now.getFullYear();
+      const m = now.getMonth();
+      const selected = new Set(CONFIG.ebtDaysByMonth[key] || []);
+      const cells = getMonthGrid(y, m);
+      const monthName = now.toLocaleString(undefined, { month: 'long' });
+
+      const card = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100 h-full');
+      const header = el('div','flex items-center justify-between mb-3');
+      header.innerHTML = `<h3 class="text-lg font-semibold text-gray-800">EBT Activation Days — ${monthName} ${y}</h3>`;
+      const editBtn = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 border border-gray-300 text-gray-800 hover:bg-gray-50 focus:ring-gray-300','Edit');
+      editBtn.onclick = () => {
+        const cur = (CONFIG.ebtDaysByMonth[key] || []).join(', ');
+        const input = prompt(`EBT activation days for ${key} (comma-separated day numbers)`, cur);
+        if (input === null) return;
+        const days = input.split(/[,\s]+/)
+          .map(v => parseInt(v,10))
+          .filter(n => Number.isFinite(n) && n >= 1 && n <= daysInMonth(y, m));
+        CONFIG.ebtDaysByMonth[key] = Array.from(new Set(days)).sort((a,b)=>a-b);
+        saveConfig(CONFIG);
+        renderAll();
+      };
+      header.appendChild(editBtn);
+      card.appendChild(header);
+
+      const grid = el('div','grid grid-cols-7 gap-2 text-xs text-gray-600');
+      ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
+        const w = el('div','text-center font-semibold text-gray-700', d);
+        grid.appendChild(w);
+      });
+
+      for (const day of cells){
+        const cell = el('div','aspect-square rounded-xl border flex items-center justify-center');
+        if (day == null){
+          cell.className += ' bg-gray-50 border-gray-100';
+          cell.textContent = '';
+        } else if (selected.has(day)){
+          cell.className += ' bg-emerald-100 border-emerald-300 text-emerald-900 font-semibold';
+          cell.textContent = day;
+        } else {
+          cell.className += ' bg-white border-gray-200 text-gray-900';
+          cell.textContent = day;
+        }
+        grid.appendChild(cell);
+      }
+      card.appendChild(grid);
+
+      if (!selected.size){
+        card.appendChild(el('p','text-sm text-gray-500 mt-3','No days set yet. Click Edit to add activation days for this month.'));
+      }
+      container.appendChild(card);
+    }
+
+    /**************
+     * LINK GRID FOR SECTION PAGES
+     **************/
+    function renderLinkGrid(container, sectionName, title){
+      container.innerHTML = '';
+      const card = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
+      const header = el('div','flex items-center justify-between mb-3');
+      header.innerHTML = `<h3 class="text-lg font-semibold text-gray-800">${title}</h3>`;
+      const addBtn = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 border border-gray-300 text-gray-800 hover:bg-gray-50 focus:ring-gray-300','Add Link');
+      addBtn.onclick = () => {
+        const ttl = prompt('Link title'); if (!ttl) return;
+        const href = prompt('URL (https://…)'); if (!href) return;
+        const desc = prompt('Optional description') || '';
+        const icon = prompt('Optional emoji/icon (e.g. 📊, 📄, 🗂️)') || '';
+        const items = CONFIG.sections[sectionName] || [];
+        CONFIG.sections[sectionName] = [...items, { title: ttl, href, desc, icon }];
+        saveConfig(CONFIG);
+        renderRoute(getRoute());
+      };
+      header.appendChild(addBtn);
+      card.appendChild(header);
+
+      const items = CONFIG.sections[sectionName] || [];
+      if (!items.length){
+        card.appendChild(el('p','text-sm text-gray-500','No links yet. Use “Add Link” to populate this section.'));
+      } else {
+        const grid = el('div','grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4');
+        for (const it of items){
+          const a = el('a','group block rounded-2xl border border-gray-200 p-4 hover:border-gray-300 hover:shadow-sm');
+          a.href = it.href; a.target = '_blank'; a.rel = 'noreferrer';
+          a.innerHTML = `
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 flex items-center justify-center rounded-xl bg-gray-100 group-hover:bg-gray-200 font-semibold text-gray-700">${it.icon || '🔗'}</div>
+              <div>
+                <div class="font-medium text-gray-900">${it.title}</div>
+                ${it.desc ? `<div class="text-sm text-gray-600">${it.desc}</div>` : ''}
+              </div>
+            </div>`;
+          grid.appendChild(a);
+        }
+        card.appendChild(grid);
+      }
+      container.appendChild(card);
+    }
+
+    /**************
+     * DASHBOARD PAGE
+     **************/
+    function renderDashboard(){
+      const app = $('#app'); app.innerHTML = '';
+
+      const header = el('div','flex items-center justify-between mb-5');
+      header.innerHTML = `
+        <div>
+          <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <p class="text-sm text-gray-600">Live traffic & weather, plus this month’s EBT activation days.</p>
+        </div>`;
+      const right = el('div','flex items-center gap-2');
+      const importBtn = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 border border-gray-300 text-gray-800 hover:bg-gray-50 focus:ring-gray-300','Import');
+      importBtn.onclick = importConfig;
+      const exportBtn = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 focus:ring-gray-900','Export');
+      exportBtn.onclick = () => exportConfig(CONFIG);
+      right.append(importBtn, exportBtn);
+      header.appendChild(right);
+      app.appendChild(header);
+
+      const grid = el('div','grid grid-cols-1 lg:grid-cols-3 gap-5');
+      const left = el('div','lg:col-span-1'); renderEBTCalendar(left);
+      const rightCol = el('div','lg:col-span-2'); renderLiveMaps(rightCol, CURRENT_COORDS, CONFIG.homeCenter);
+      grid.append(left, rightCol);
+      app.appendChild(grid);
+
+      const wx = el('div'); app.appendChild(wx);
+      renderWeather(wx, CURRENT_COORDS);
+    }
+
+    /**************
+     * SECTION ROUTER
+     **************/
+    function renderRoute(route){
+      $('#orgName').textContent = CONFIG.orgName;
+      $('#orgNameFooter').textContent = CONFIG.orgName;
+      $('#year').textContent = new Date().getFullYear();
+
+      const titleMap = {
+        '/': 'Dashboard',
+        '/reports': 'Reports',
+        '/manuals': 'Manuals',
+        '/planograms': 'Planograms',
+        '/corporate': 'Corporate',
+        '/store': 'Store',
+        '/booth': 'Booth',
+        '/scan': 'Scan',
+        '/receiving': 'Receiving',
+      };
+
+      if (route === '/') return renderDashboard();
+
+      const app = $('#app'); app.innerHTML = '';
+      const header = el('div','flex items-center justify-between mb-5');
+      header.innerHTML = `<h1 class="text-2xl font-semibold text-gray-900">${titleMap[route] || 'Section'}</h1>`;
+      const btns = el('div','flex items-center gap-2');
+      const exp = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 focus:ring-gray-900','Export Config');
+      exp.onclick = () => exportConfig(CONFIG);
+      btns.appendChild(exp);
+      header.appendChild(btns);
+      app.appendChild(header);
+
+      const sectionName = route.replace('/','');
+      renderLinkGrid(app, sectionName, titleMap[route] || sectionName);
+    }
+
+    /**************
+     * NAV + TABS
+     **************/
+    function buildNav(){
+      const top = $('#topNav'); top.innerHTML = '';
+      const foot = $('#footerLinks'); foot.innerHTML = '';
+      const tabs = $('#mobileTabs'); tabs.innerHTML = '';
+      for (const item of NAV_ITEMS){
+        const a = el('a','px-3 py-2 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100', item.label);
+        a.href = '#' + item.path;
+        top.appendChild(a);
+
+        const f = el('a','hover:underline', item.label);
+        f.href = '#' + item.path;
+        foot.appendChild(f);
+
+        const m = el('a','flex-1 text-center text-xs font-medium text-gray-700 py-2 hover:bg-gray-100 rounded-lg', item.label);
+        m.href = '#' + item.path;
+        tabs.appendChild(m);
+      }
+    }
+
+    /**************
+     * GEOLOCATION + INITIAL RENDER
+     **************/
+    let CURRENT_COORDS = null;
+
+    function setLocBanner(msg){
+      if (!msg){ $('#locBanner').classList.add('hidden'); $('#locMsg').textContent = ''; return; }
+      $('#locBanner').classList.remove('hidden');
+      $('#locMsg').textContent = msg;
+    }
+
+    function locate(){
+      if (!('geolocation' in navigator)){
+        setLocBanner('Geolocation not supported. Using default center.');
+        CURRENT_COORDS = { lat: CONFIG.homeCenter.lat, lon: CONFIG.homeCenter.lon };
+        return Promise.resolve(CURRENT_COORDS);
+      }
+      setLocBanner('Locating… If the prompt is blocked, we’ll use the default center.');
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => setLocBanner('If location is blocked, using default center.'), 4000);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            clearTimeout(timer);
+            setLocBanner('');
+            CURRENT_COORDS = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+            resolve(CURRENT_COORDS);
+          },
+          () => {
+            clearTimeout(timer);
+            setLocBanner('Using default center.');
+            CURRENT_COORDS = { lat: CONFIG.homeCenter.lat, lon: CONFIG.homeCenter.lon };
+            resolve(CURRENT_COORDS);
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        );
+      });
+    }
+
+    function renderAll(){
+      buildNav();
+      renderRoute(getRoute());
+    }
+
+    window.addEventListener('hashchange', () => renderRoute(getRoute()));
+
+    // Boot
+    (async function init(){
+      await locate();
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
