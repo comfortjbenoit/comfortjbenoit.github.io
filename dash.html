@@ -38,9 +38,17 @@
     <div class="container"><div class="py-2 text-sm text-amber-900" id="locMsg"></div></div>
   </div>
 
-  <!-- Main -->
+  <!-- Main: Sidebar + Content -->
   <main class="container">
-    <div id="app" class="py-6"></div>
+    <div class="py-6 grid grid-cols-12 gap-6">
+      <!-- Left sidebar nav -->
+      <aside class="col-span-12 md:col-span-3 lg:col-span-2">
+        <nav id="sideNav" class="bg-white border border-gray-200 rounded-2xl p-2 sticky top-4"></nav>
+      </aside>
+
+      <!-- App content -->
+      <section id="app" class="col-span-12 md:col-span-9 lg:col-span-10"></section>
+    </div>
   </main>
 
   <!-- Footer -->
@@ -52,6 +60,7 @@
     </div>
   </footer>
 
+  <!-- Mobile tabs -->
   <div class="md:hidden sticky bottom-0 inset-x-0 bg-white border-t border-gray-200 p-2 flex justify-between z-10" id="mobileTabs"></div>
 
   <script>
@@ -66,33 +75,109 @@
       { path: '/scan', label: 'Scan' },
       { path: '/receiving', label: 'Receiving' },
     ];
+    const PERMA_EBT_DAYS = [1,3,5,6,7,9,11,12,13,15]; // fixed days
     const $ = (sel) => document.querySelector(sel);
     const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; };
 
     /**************
-     * LIVE MAPS REPLACEMENT (TranStar traffic + KTRK radar image)
+     * EBT CALENDAR (fixed)
+     **************/
+    function daysInMonth(y, m){ return new Date(y, m+1, 0).getDate(); }
+    function getMonthGrid(y, m){
+      const first = new Date(y, m, 1), start = first.getDay(), total = daysInMonth(y, m), cells = [];
+      for (let i=0;i<start;i++) cells.push(null);
+      for (let d=1; d<=total; d++) cells.push(d);
+      while (cells.length % 7) cells.push(null);
+      return cells;
+    }
+    function renderEBTCalendar(container){
+      const now = new Date();
+      const y = now.getFullYear(), m = now.getMonth();
+      const cells = getMonthGrid(y, m);
+      const monthName = now.toLocaleString(undefined, { month: 'long' });
+
+      const card = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100 h-full');
+      const header = el('div','flex items-center justify-between mb-3');
+      header.innerHTML = `<h3 class="text-lg font-semibold text-gray-800">EBT Activation Days — ${monthName} ${y}</h3>`;
+      card.appendChild(header);
+
+      const grid = el('div','grid grid-cols-7 gap-2 text-xs text-gray-600');
+      ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => grid.appendChild(el('div','text-center font-semibold text-gray-700', d)));
+
+      const maxDay = daysInMonth(y, m);
+      const selected = new Set(PERMA_EBT_DAYS.filter(d => d >= 1 && d <= maxDay));
+      for (const day of cells){
+        const cell = el('div','aspect-square rounded-xl border flex items-center justify-center');
+        if (day == null){
+          cell.className += ' bg-gray-50 border-gray-100';
+        } else if (selected.has(day)){
+          cell.className += ' bg-[rgba(128,0,0,0.12)] border-[rgba(128,0,0,0.35)] text-[#800000] font-semibold';
+          cell.textContent = day;
+        } else {
+          cell.className += ' bg-white border-gray-200 text-gray-900';
+          cell.textContent = day;
+        }
+        grid.appendChild(cell);
+      }
+      card.appendChild(grid);
+      container.appendChild(card);
+    }
+
+    /**************
+     * Condensed Weather Widget (still included)
+     **************/
+    const WCODE = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',61:'🌧️',63:'🌧️',65:'🌧️',80:'🌧️',81:'🌧️',82:'⛈️',95:'⛈️'};
+    async function fetchForecast(lat, lon){
+      const url = new URL('https://api.open-meteo.com/v1/forecast');
+      url.searchParams.set('latitude', lat);
+      url.searchParams.set('longitude', lon);
+      url.searchParams.set('hourly','temperature_2m,precipitation,weathercode');
+      url.searchParams.set('current_weather','true');
+      url.searchParams.set('temperature_unit','fahrenheit');
+      url.searchParams.set('timezone','auto');
+      const res = await fetch(url.toString());
+      return res.json();
+    }
+    function renderWeather(container, coords){
+      container.innerHTML='';
+      const card = el('div','bg-white shadow-sm rounded-2xl px-4 py-3 border border-gray-100');
+      const row = el('div','flex items-center gap-4 overflow-x-auto');
+      row.appendChild(el('div','shrink-0 text-sm font-semibold text-gray-800','Weather'));
+      const status = el('div','text-sm text-gray-500','Loading…');
+      row.appendChild(status); card.appendChild(row); container.appendChild(card);
+
+      if (!coords){ status.textContent='Locating…'; return; }
+      fetchForecast(coords.lat, coords.lon).then(data=>{
+        status.remove();
+        const cw=data.current_weather;
+        if(cw){
+          const cur = el('div','shrink-0 flex items-center gap-2 px-2 py-1 rounded-lg border border-gray-200',
+            `<span class="text-lg">${WCODE[cw.weathercode]||''}</span>
+             <span class="text-sm font-medium">${Math.round(cw.temperature)}°F</span>
+             <span class="text-xs text-gray-500">W ${Math.round(cw.windspeed)} mph</span>`);
+          row.appendChild(cur);
+        }
+      });
+    }
+
+    /**************
+     * Live Maps Replacement (TranStar + KTRK)
      **************/
     function renderLiveMaps(container){
-      container.innerHTML = '';
-      const grid = el('div','grid grid-cols-1 lg:grid-cols-2 gap-5');
+      container.innerHTML='';
+      const grid=el('div','grid grid-cols-1 lg:grid-cols-2 gap-5');
 
-      // Traffic (TranStar gif)
-      const traffic = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
-      traffic.innerHTML = `
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-semibold text-gray-800">Live Traffic (TranStar)</h3>
-        </div>
+      const traffic=el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
+      traffic.innerHTML=`
+        <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Live Traffic (TranStar)</h3></div>
         <div class="aspect-video rounded-xl overflow-hidden border">
-          <img src="http://traffic.houstontranstar.org/data/layers/houston_region_pub_layer_radar.gif" alt="Houston TranStar Traffic" class="w-full h-full object-cover"/>
+          <img src="http://traffic.houstontranstar.org/data/layers/houston_region_pub_layer_radar.gif" alt="Houston Traffic" class="w-full h-full object-cover"/>
         </div>`;
       grid.appendChild(traffic);
 
-      // Weather Radar (KTRK 5-day image)
-      const radar = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
-      radar.innerHTML = `
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-lg font-semibold text-gray-800">Weather Radar (KTRK)</h3>
-        </div>
+      const radar=el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
+      radar.innerHTML=`
+        <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Weather Radar (KTRK)</h3></div>
         <div class="aspect-video rounded-xl overflow-hidden border">
           <img src="https://cdns.abclocal.go.com/three/ktrk/weather/WWW_KTRK_5DAY_HD.jpg?w=300&r=16%3A9" alt="KTRK Weather" class="w-full h-full object-cover"/>
         </div>`;
@@ -102,32 +187,42 @@
     }
 
     /**************
-     * DASHBOARD (simplified just to demo maps swap)
+     * Dashboard
      **************/
+    let CURRENT_COORDS={lat:29.6658,lon:-95.0194}; // fallback
     function renderDashboard(){
-      const app = $('#app'); app.innerHTML = '';
-      const header = el('div','mb-5','<h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>');
+      const app=$('#app'); app.innerHTML='';
+      const header=el('div','mb-5','<h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>');
       app.appendChild(header);
-      const rightCol = el('div'); renderLiveMaps(rightCol);
-      app.appendChild(rightCol);
+
+      const grid=el('div','grid grid-cols-1 lg:grid-cols-3 gap-5');
+      const left=el('div','lg:col-span-1'); renderEBTCalendar(left);
+      const rightCol=el('div','lg:col-span-2'); renderLiveMaps(rightCol);
+      grid.append(left,rightCol);
+      app.appendChild(grid);
+
+      const wx=el('div','mt-5'); app.appendChild(wx);
+      renderWeather(wx,CURRENT_COORDS);
     }
 
-    function renderRoute(route){
-      $('#orgNameFooter').textContent = "Food Town Intranet";
-      $('#year').textContent = new Date().getFullYear();
-      if (route === '/') return renderDashboard();
-    }
-
+    /**************
+     * Router + Nav
+     **************/
+    function renderRoute(route){ if(route==='/'){renderDashboard();} }
     function buildNav(){
-      const tabs = $('#mobileTabs'); tabs.innerHTML = '';
-      for (const item of NAV_ITEMS){
-        const m = el('a','flex-1 text-center text-xs font-medium text-gray-700 py-2 hover:bg-gray-100 rounded-lg', item.label);
-        m.href = '#' + item.path;
-        tabs.appendChild(m);
+      const side=$('#sideNav'); side.innerHTML='';
+      const tabs=$('#mobileTabs'); tabs.innerHTML='';
+      const list=el('div','flex flex-col');
+      for(const item of NAV_ITEMS){
+        const a=el('a','px-3 py-2 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100',item.label);
+        a.href='#'+item.path; a.dataset.path=item.path; list.appendChild(a);
+        const m=el('a','flex-1 text-center text-xs font-medium text-gray-700 py-2 hover:bg-gray-100 rounded-lg',item.label);
+        m.href='#'+item.path; tabs.appendChild(m);
       }
+      side.appendChild(list);
     }
 
-    function renderAll(){ buildNav(); renderRoute('/'); }
+    function renderAll(){ buildNav(); renderRoute('/'); $('#year').textContent=new Date().getFullYear(); }
     renderAll();
   </script>
 </body>
