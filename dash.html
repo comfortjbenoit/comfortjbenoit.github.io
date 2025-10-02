@@ -45,12 +45,11 @@
     <div id="app" class="py-6"></div>
   </main>
 
-  <!-- Footer -->
+  <!-- Footer (links removed) -->
   <footer class="mt-10 border-t border-gray-200 bg-white">
     <div class="container">
-      <div class="py-4 text-xs text-gray-500 flex items-center justify-between">
-        <div>© <span id="year"></span> <span id="orgNameFooter">Food Town Intranet</span></div>
-        <div id="footerLinks" class="flex items-center gap-3"></div>
+      <div class="py-4 text-xs text-gray-500">
+        © <span id="year"></span> <span id="orgNameFooter">Food Town Intranet</span>
       </div>
     </div>
   </footer>
@@ -134,7 +133,7 @@
     }
 
     /**************
-     * WEATHER (Open-Meteo)
+     * WEATHER (Open-Meteo) — condensed one-row card
      **************/
     const WCODE = { 0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌧️',63:'🌧️',65:'🌧️',71:'🌨️',73:'🌨️',75:'❄️',80:'🌧️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️' };
 
@@ -153,34 +152,36 @@
 
     function renderWeather(container, coords){
       container.innerHTML = '';
-      const card = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
-      const title = el('div','flex items-center gap-3 mb-3');
-      title.innerHTML = `<h3 class="text-lg font-semibold text-gray-800">Local Weather</h3>` +
-                        (coords ? `<span class="inline-flex items-center rounded-full border border-gray-300 px-2.5 py-0.5 text-xs font-medium text-gray-700">${coords.lat.toFixed(3)}, ${coords.lon.toFixed(3)}</span>` : '');
-      card.appendChild(title);
+      const card = el('div','bg-white shadow-sm rounded-2xl px-4 py-3 border border-gray-100');
+      // compact header row
+      const row = el('div','flex items-center gap-4 overflow-x-auto');
+      const title = el('div','shrink-0 text-sm font-semibold text-gray-800','Weather');
+      row.appendChild(title);
 
-      const status = el('p','text-sm text-gray-500','Loading forecast…');
-      card.appendChild(status);
+      const status = el('div','text-sm text-gray-500','Loading…');
+      row.appendChild(status);
+      card.appendChild(row);
       container.appendChild(card);
 
       if (!coords){ status.textContent = 'Locating…'; return; }
 
       fetchForecast(coords.lat, coords.lon).then(data => {
+        // Clear loading text
         status.remove();
 
+        // Current conditions (compact)
         const cw = data.current_weather;
         if (cw){
-          const header = el('div','flex items-center gap-6 mb-4');
-          header.innerHTML = `
-            <div class="text-4xl">${WCODE[cw.weathercode] || ''}</div>
-            <div>
-              <div class="text-2xl font-semibold">${Math.round(cw.temperature)}°F</div>
-              <div class="text-sm text-gray-600">Wind ${Math.round(cw.windspeed)} mph</div>
-            </div>`;
-          card.appendChild(header);
+          const cur = el('div','shrink-0 flex items-center gap-2 px-2 py-1 rounded-lg border border-gray-200');
+          cur.innerHTML = `
+            <span class="text-lg">${WCODE[cw.weathercode] || ''}</span>
+            <span class="text-sm font-medium">${Math.round(cw.temperature)}°F</span>
+            <span class="text-xs text-gray-500">W ${Math.round(cw.windspeed)} mph</span>
+            <span class="ml-2 text-[11px] text-gray-500">${coords.lat.toFixed(2)}, ${coords.lon.toFixed(2)}</span>`;
+          row.appendChild(cur);
         }
 
-        const grid = el('div','grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3');
+        // Next 6 hours as tiny chips (single row)
         const hours = (data.hourly?.time || []).map((t,i)=>({
           time: t,
           temp: data.hourly.temperature_2m[i],
@@ -188,19 +189,20 @@
           precip: data.hourly.precipitation[i],
         }));
         const nowIso = new Date().toISOString().slice(0,13);
-        const upcoming = hours.filter(h => h.time.slice(0,13) >= nowIso).slice(0,12);
+        const upcoming = hours.filter(h => h.time.slice(0,13) >= nowIso).slice(0,6);
+
+        const strip = el('div','flex items-center gap-2');
         for (const h of upcoming){
           const dt = new Date(h.time);
           const label = dt.toLocaleTimeString([], { hour: 'numeric' });
-          const cell = el('div','rounded-xl border border-gray-200 p-3 text-center');
-          cell.innerHTML = `
-            <div class="text-xs text-gray-500 mb-1">${label}</div>
-            <div class="text-xl">${WCODE[h.wcode] || ''}</div>
-            <div class="font-semibold">${Math.round(h.temp)}°</div>
-            <div class="text-xs text-gray-500">${h.precip ? `${h.precip} mm` : '—'}</div>`;
-          grid.appendChild(cell);
+          const chip = el('div','shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs');
+          chip.innerHTML = `
+            <span class="">${label}</span>
+            <span class="text-base leading-none">${WCODE[h.wcode] || ''}</span>
+            <span class="font-medium">${Math.round(h.temp)}°</span>`;
+          strip.appendChild(chip);
         }
-        card.appendChild(grid);
+        row.appendChild(strip);
       }).catch(e => {
         status.className = 'text-sm text-red-600';
         status.textContent = String(e);
@@ -347,13 +349,7 @@
           <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
           <p class="text-sm text-gray-600">Live traffic & weather, plus this month’s EBT activation days.</p>
         </div>`;
-      const right = el('div','flex items-center gap-2');
-      const importBtn = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 border border-gray-300 text-gray-800 hover:bg-gray-50 focus:ring-gray-300','Import');
-      importBtn.onclick = importConfig;
-      const exportBtn = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 focus:ring-gray-900','Export');
-      exportBtn.onclick = () => exportConfig(CONFIG);
-      right.append(importBtn, exportBtn);
-      header.appendChild(right);
+      // (Import/Export buttons removed)
       app.appendChild(header);
 
       const grid = el('div','grid grid-cols-1 lg:grid-cols-3 gap-5');
@@ -362,7 +358,7 @@
       grid.append(left, rightCol);
       app.appendChild(grid);
 
-      const wx = el('div'); app.appendChild(wx);
+      const wx = el('div','mt-5'); app.appendChild(wx);
       renderWeather(wx, CURRENT_COORDS);
     }
 
@@ -391,11 +387,7 @@
       const app = $('#app'); app.innerHTML = '';
       const header = el('div','flex items-center justify-between mb-5');
       header.innerHTML = `<h1 class="text-2xl font-semibold text-gray-900">${titleMap[route] || 'Section'}</h1>`;
-      const btns = el('div','flex items-center gap-2');
-      const exp = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 bg-gray-900 text-white hover:bg-gray-800 focus:ring-gray-900','Export Config');
-      exp.onclick = () => exportConfig(CONFIG);
-      btns.appendChild(exp);
-      header.appendChild(btns);
+      // (Export button removed)
       app.appendChild(header);
 
       const sectionName = route.replace('/','');
@@ -407,16 +399,11 @@
      **************/
     function buildNav(){
       const top = $('#topNav'); top.innerHTML = '';
-      const foot = $('#footerLinks'); foot.innerHTML = '';
       const tabs = $('#mobileTabs'); tabs.innerHTML = '';
       for (const item of NAV_ITEMS){
         const a = el('a','px-3 py-2 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100', item.label);
         a.href = '#' + item.path;
         top.appendChild(a);
-
-        const f = el('a','hover:underline', item.label);
-        f.href = '#' + item.path;
-        foot.appendChild(f);
 
         const m = el('a','flex-1 text-center text-xs font-medium text-gray-700 py-2 hover:bg-gray-100 rounded-lg', item.label);
         m.href = '#' + item.path;
