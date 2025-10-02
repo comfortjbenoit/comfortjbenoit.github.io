@@ -22,7 +22,7 @@
 </head>
 <body class="min-h-screen">
 
-  <!-- Top Nav -->
+  <!-- Top Bar -->
   <div class="bg-white border-b border-gray-200">
     <div class="container">
       <div class="flex items-center gap-4 py-4">
@@ -30,7 +30,6 @@
           <div class="h-9 w-9 rounded-xl bg-gray-900 text-white flex items-center justify-center font-bold">FT</div>
           <div id="orgName" class="text-xl font-semibold text-gray-900">Food Town Intranet</div>
         </div>
-        <nav class="ml-auto hidden md:flex gap-2" id="topNav"></nav>
       </div>
     </div>
   </div>
@@ -40,13 +39,21 @@
     <div class="container"><div class="py-2 text-sm text-amber-900" id="locMsg"></div></div>
   </div>
 
-  <!-- Main -->
+  <!-- Main: Sidebar + Content -->
   <main class="container">
-    <div id="app" class="py-6"></div>
+    <div class="py-6 grid grid-cols-12 gap-6">
+      <!-- Left sidebar nav -->
+      <aside class="col-span-12 md:col-span-3 lg:col-span-2">
+        <nav id="sideNav" class="bg-white border border-gray-200 rounded-2xl p-2 sticky top-4"></nav>
+      </aside>
+
+      <!-- App content -->
+      <section id="app" class="col-span-12 md:col-span-9 lg:col-span-10"></section>
+    </div>
   </main>
 
   <!-- Footer (links removed) -->
-  <footer class="mt-10 border-t border-gray-200 bg-white">
+  <footer class="mt-2 border-t border-gray-200 bg-white">
     <div class="container">
       <div class="py-4 text-xs text-gray-500">
         © <span id="year"></span> <span id="orgNameFooter">Food Town Intranet</span>
@@ -72,13 +79,13 @@
       { path: '/scan', label: 'Scan' },
       { path: '/receiving', label: 'Receiving' },
     ];
+    const PERMA_EBT_DAYS = [1,3,5,6,7,9,11,12,13,15]; // fixed days
     const LS_KEY = 'intranet_dashboard_config_v1';
     const defaultConfig = {
       orgName: 'Food Town Intranet',
       homeCenter: { lat: 29.6658, lon: -95.0194, zoom: 10 }, // La Porte, TX default
       sections: { reports: [], manuals: [], planograms: [], corporate: [], store: [], booth: [], scan: [], receiving: [] },
-      // EBT days keyed by 'YYYY-MM' => [1,2,3,...]
-      ebtDaysByMonth: {},
+      ebtDaysByMonth: {}, // ignored now that PERMA_EBT_DAYS is fixed
     };
     function loadConfig() {
       try { return { ...defaultConfig, ...(JSON.parse(localStorage.getItem(LS_KEY)) || {}) }; }
@@ -109,28 +116,6 @@
       while (cells.length % 7) cells.push(null);
       return cells;
     }
-    function exportConfig(cfg){
-      const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'intranet-dashboard-config.json'; a.click();
-      URL.revokeObjectURL(url);
-    }
-    function importConfig(){
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'application/json';
-      input.onchange = () => {
-        const file = input.files?.[0]; if (!file) return;
-        const r = new FileReader();
-        r.onload = () => {
-          try { CONFIG = { ...defaultConfig, ...JSON.parse(String(r.result)) }; saveConfig(CONFIG); renderAll(); }
-          catch(e){ alert('Invalid config: ' + e); }
-        };
-        r.readAsText(file);
-      };
-      input.click();
-    }
 
     /**************
      * WEATHER (Open-Meteo) — condensed one-row card
@@ -153,7 +138,6 @@
     function renderWeather(container, coords){
       container.innerHTML = '';
       const card = el('div','bg-white shadow-sm rounded-2xl px-4 py-3 border border-gray-100');
-      // compact header row
       const row = el('div','flex items-center gap-4 overflow-x-auto');
       const title = el('div','shrink-0 text-sm font-semibold text-gray-800','Weather');
       row.appendChild(title);
@@ -166,10 +150,8 @@
       if (!coords){ status.textContent = 'Locating…'; return; }
 
       fetchForecast(coords.lat, coords.lon).then(data => {
-        // Clear loading text
         status.remove();
 
-        // Current conditions (compact)
         const cw = data.current_weather;
         if (cw){
           const cur = el('div','shrink-0 flex items-center gap-2 px-2 py-1 rounded-lg border border-gray-200');
@@ -181,7 +163,6 @@
           row.appendChild(cur);
         }
 
-        // Next 6 hours as tiny chips (single row)
         const hours = (data.hourly?.time || []).map((t,i)=>({
           time: t,
           temp: data.hourly.temperature_2m[i],
@@ -197,7 +178,7 @@
           const label = dt.toLocaleTimeString([], { hour: 'numeric' });
           const chip = el('div','shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-200 text-xs');
           chip.innerHTML = `
-            <span class="">${label}</span>
+            <span>${label}</span>
             <span class="text-base leading-none">${WCODE[h.wcode] || ''}</span>
             <span class="font-medium">${Math.round(h.temp)}°</span>`;
           strip.appendChild(chip);
@@ -235,33 +216,18 @@
     }
 
     /**************
-     * EBT CALENDAR
+     * EBT CALENDAR (fixed days, maroon highlight)
      **************/
     function renderEBTCalendar(container){
       const now = new Date();
-      const key = yyyymm(now);
       const y = now.getFullYear();
       const m = now.getMonth();
-      const selected = new Set(CONFIG.ebtDaysByMonth[key] || []);
       const cells = getMonthGrid(y, m);
       const monthName = now.toLocaleString(undefined, { month: 'long' });
 
       const card = el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100 h-full');
       const header = el('div','flex items-center justify-between mb-3');
       header.innerHTML = `<h3 class="text-lg font-semibold text-gray-800">EBT Activation Days — ${monthName} ${y}</h3>`;
-      const editBtn = el('button','inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm px-4 py-2 border border-gray-300 text-gray-800 hover:bg-gray-50 focus:ring-gray-300','Edit');
-      editBtn.onclick = () => {
-        const cur = (CONFIG.ebtDaysByMonth[key] || []).join(', ');
-        const input = prompt(`EBT activation days for ${key} (comma-separated day numbers)`, cur);
-        if (input === null) return;
-        const days = input.split(/[,\s]+/)
-          .map(v => parseInt(v,10))
-          .filter(n => Number.isFinite(n) && n >= 1 && n <= daysInMonth(y, m));
-        CONFIG.ebtDaysByMonth[key] = Array.from(new Set(days)).sort((a,b)=>a-b);
-        saveConfig(CONFIG);
-        renderAll();
-      };
-      header.appendChild(editBtn);
       card.appendChild(header);
 
       const grid = el('div','grid grid-cols-7 gap-2 text-xs text-gray-600');
@@ -270,13 +236,17 @@
         grid.appendChild(w);
       });
 
+      const maxDay = daysInMonth(y, m);
+      const selected = new Set(PERMA_EBT_DAYS.filter(d => d >= 1 && d <= maxDay));
+
       for (const day of cells){
         const cell = el('div','aspect-square rounded-xl border flex items-center justify-center');
         if (day == null){
           cell.className += ' bg-gray-50 border-gray-100';
           cell.textContent = '';
         } else if (selected.has(day)){
-          cell.className += ' bg-emerald-100 border-emerald-300 text-emerald-900 font-semibold';
+          /* maroon transparent highlight */
+          cell.className += ' bg-[rgba(128,0,0,0.12)] border-[rgba(128,0,0,0.35)] text-[#800000] font-semibold';
           cell.textContent = day;
         } else {
           cell.className += ' bg-white border-gray-200 text-gray-900';
@@ -286,9 +256,6 @@
       }
       card.appendChild(grid);
 
-      if (!selected.size){
-        card.appendChild(el('p','text-sm text-gray-500 mt-3','No days set yet. Click Edit to add activation days for this month.'));
-      }
       container.appendChild(card);
     }
 
@@ -349,7 +316,6 @@
           <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
           <p class="text-sm text-gray-600">Live traffic & weather, plus this month’s EBT activation days.</p>
         </div>`;
-      // (Import/Export buttons removed)
       app.appendChild(header);
 
       const grid = el('div','grid grid-cols-1 lg:grid-cols-3 gap-5');
@@ -387,28 +353,47 @@
       const app = $('#app'); app.innerHTML = '';
       const header = el('div','flex items-center justify-between mb-5');
       header.innerHTML = `<h1 class="text-2xl font-semibold text-gray-900">${titleMap[route] || 'Section'}</h1>`;
-      // (Export button removed)
       app.appendChild(header);
 
       const sectionName = route.replace('/','');
       renderLinkGrid(app, sectionName, titleMap[route] || sectionName);
+
+      // Update active state in sidebar
+      highlightActive(route);
     }
 
     /**************
-     * NAV + TABS
+     * SIDEBAR + MOBILE TABS
      **************/
     function buildNav(){
-      const top = $('#topNav'); top.innerHTML = '';
+      const side = $('#sideNav'); side.innerHTML = '';
       const tabs = $('#mobileTabs'); tabs.innerHTML = '';
+
+      const list = el('div','flex flex-col');
       for (const item of NAV_ITEMS){
         const a = el('a','px-3 py-2 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-100', item.label);
         a.href = '#' + item.path;
-        top.appendChild(a);
+        a.dataset.path = item.path;
+        list.appendChild(a);
 
         const m = el('a','flex-1 text-center text-xs font-medium text-gray-700 py-2 hover:bg-gray-100 rounded-lg', item.label);
         m.href = '#' + item.path;
         tabs.appendChild(m);
       }
+      side.appendChild(list);
+
+      highlightActive(getRoute());
+    }
+
+    function highlightActive(route){
+      // route like "/reports"
+      const current = route || '/';
+      document.querySelectorAll('#sideNav a').forEach(a => {
+        const isActive = a.dataset.path === current;
+        a.classList.toggle('bg-gray-900', isActive);
+        a.classList.toggle('text-white', isActive);
+        a.classList.toggle('hover:bg-gray-100', !isActive);
+      });
     }
 
     /**************
@@ -454,7 +439,10 @@
       renderRoute(getRoute());
     }
 
-    window.addEventListener('hashchange', () => renderRoute(getRoute()));
+    window.addEventListener('hashchange', () => {
+      renderRoute(getRoute());
+      highlightActive(getRoute());
+    });
 
     // Boot
     (async function init(){
