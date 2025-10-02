@@ -75,7 +75,7 @@
       { path: '/scan', label: 'Scan' },
       { path: '/receiving', label: 'Receiving' },
     ];
-    const PERMA_EBT_DAYS = [1,3,5,6,7,9,11,12,13,15]; // fixed days
+    const PERMA_EBT_DAYS = [1,3,5,6,7,9,11,12,13,15];
     const $ = (sel) => document.querySelector(sel);
     const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; };
 
@@ -124,7 +124,7 @@
     }
 
     /**************
-     * Condensed Weather Widget (still included)
+     * Condensed Weather Widget
      **************/
     const WCODE = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',61:'🌧️',63:'🌧️',65:'🌧️',80:'🌧️',81:'🌧️',82:'⛈️',95:'⛈️'};
     async function fetchForecast(lat, lon){
@@ -161,20 +161,22 @@
     }
 
     /**************
-     * Live Maps Replacement (TranStar + KTRK)
+     * Live Maps (DriveTexas + KTRK)
      **************/
     function renderLiveMaps(container){
       container.innerHTML='';
       const grid=el('div','grid grid-cols-1 lg:grid-cols-2 gap-5');
 
+      // DriveTexas iframe
       const traffic=el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
       traffic.innerHTML=`
-        <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Live Traffic (TranStar)</h3></div>
-        <div class="aspect-video rounded-xl overflow-hidden border">
-          <img src="traffic.houstontranstar.org/data/layers/houston_region_layer_link.gif" alt="Houston Traffic" class="w-full h-full object-cover"/>
+        <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Live Traffic (DriveTexas)</h3></div>
+        <div class="rounded-xl overflow-hidden border">
+          <iframe id="drivetexas" src="https://static.drivetexas.org/" style="width:100%;height:520px;border:0" title="DriveTexas Static Traffic Map"></iframe>
         </div>`;
       grid.appendChild(traffic);
 
+      // Weather Radar (KTRK)
       const radar=el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
       radar.innerHTML=`
         <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Weather Radar (KTRK)</h3></div>
@@ -184,6 +186,13 @@
       grid.appendChild(radar);
 
       container.appendChild(grid);
+
+      // auto-refresh DriveTexas every 5 min
+      const MINUTES=5;
+      setInterval(()=>{
+        const f=document.getElementById('drivetexas');
+        if(f){ f.src="https://static.drivetexas.org/?t="+Date.now(); }
+      },MINUTES*60*1000);
     }
 
     /**************
