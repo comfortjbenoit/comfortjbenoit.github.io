@@ -167,15 +167,15 @@
       container.innerHTML='';
       const grid=el('div','grid grid-cols-1 lg:grid-cols-2 gap-5');
 
-      // DriveTexas iframe
-      const traffic=el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
-      traffic.innerHTML=`
-        <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Live Traffic (DriveTexas)</h3></div>
-        <div class="rounded-xl overflow-hidden border">
-          <iframe id="drivetexas" src="https://static.drivetexas.org/" style="width:100%;height:520px;border:0" title="DriveTexas Static Traffic Map"></iframe>
+      // Traffic
+      const radar=el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
+      radar.innerHTML=`
+        <div class="flex items-center justify-between mb-3"><h3 class="text-lg font-semibold text-gray-800">Weather Radar (KTRK)</h3></div>
+        <div class="aspect-video rounded-xl overflow-hidden border">
+          <img src="https://traffic.houstontranstar.org/data/layers/houston_region_layer_speed.gif" alt="Houston Traffic" class="w-full h-full object-cover"/>
         </div>`;
       grid.appendChild(traffic);
-
+  
       // Weather Radar (KTRK)
       const radar=el('div','bg-white shadow-sm rounded-2xl p-5 border border-gray-100');
       radar.innerHTML=`
