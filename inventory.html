@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Joe Valadez Inventory</title>
+
+<!-- CDN libs -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/advancedFormat.js"></script>
+<script>
+  dayjs.extend(window.dayjs_plugin_advancedFormat);
+</script>
+
+<style>
+/* ... All your CSS from your original HTML (unchanged) ... */
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; --accent:#0b69ff;}
+body{margin:0;background:#f6f8fb;color:#111}
+header{background:linear-gradient(90deg,#ffffff, #eef4ff);padding:18px 24px;border-bottom:1px solid #e3e8f5;display:flex;justify-content:space-between;align-items:center;}
+h1{margin:0;font-size:18px}
+.wrap{max-width:1100px;margin:22px auto;padding:18px;background:#fff;border-radius:12px;box-shadow:0 6px 20px rgba(12,20,60,0.06)}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.col{flex:1;min-width:240px}
+label{display:block;font-size:13px;color:#4b5563;margin-bottom:6px}
+input,select,button,textarea{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #d6dbe9;background:#fff}
+button{background:var(--accent);color:#fff;border:none;padding:10px 12px;border-radius:8px;cursor:pointer}
+button.ghost{background:#eef3ff;color:var(--accent);border:1px solid #d6e4ff}
+.small{font-size:13px;padding:6px 8px}
+.card{padding:12px;border-radius:10px;background:#fbfdff;border:1px solid #eef2fb}
+.list{max-height:220px;overflow:auto;padding:6px;border-radius:8px;background:#fff;border:1px solid #e6eaf3}
+table{border-collapse:collapse;width:100%}
+th,td{padding:6px;border:1px solid #e6eaf3;text-align:left;font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+footer{font-size:13px;color:#556; margin-top:12px}
+.status{font-size:13px;color:#0b69ff}
+.error{color:#c0392b}
+.ok{color:#0b8f3b}
+pre{background:#0f1724;color:#e6f0ff;padding:10px;border-radius:8px;overflow:auto}
+#inventoryGrid {
+  font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace;
+  font-size: 13px;
+  background: #0f1724;
+  color: #e6f0ff;
+  padding: 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  max-height: 420px;
+  white-space: pre;
+}
+#inventoryGrid .cell-editing {
+  background: #fffbe7;
+  color: #222;
+  outline: 2px solid #0b69ff;
+}
+#importPreview .filename {
+  font-size: 12px;
+  color: #34495e;
+  font-family: monospace;
+}
+#importPreview .store {
+  font-size: 13px;
+  color: #0b69ff;
+  font-family: monospace;
+  margin-left: 10px;
+}
+#storesModalOverlay {
+  position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(32,40,60,0.18);display:none;align-items:center;justify-content:center;z-index:1000;
+}
+#storesModal {
+  background:#fff;border-radius:12px;box-shadow:0 6px 30px rgba(12,20,60,0.15);padding:24px;min-width:320px;
+  max-width:98vw;
+}
+#storesModal h2 {
+  font-size:16px;margin:0 0 8px 0
+}
+#storesModal .modal-list {
+  max-height:180px;overflow:auto;margin-bottom:8px;border-radius:8px;background:#f6f7fa;border:1px solid #e6eaf3;padding:6px;
+}
+#storesModal .modal-actions {
+  display:flex;gap:8px;margin-top:12px;
+}
+#storesBtn {
+  background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;float:right;min-width:44px;min-height:30px;
+}
+#templateStatus {
+  font-size:12px;
+  margin:8px 0;
+}
+#missingStoresCard {
+  background: #fffbe7;
+  border: 1px solid #f1c40f;
+  color: #c0392b;
+  margin: 0 0 18px 0;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 15px;
+}
+#missingStoresCard ul {
+  margin: 8px 0 0 0;
+  padding: 0 0 0 18px;
+}
+#missingStoresCard ul li {
+  font-family:monospace;
+  color: #c0392b;
+  font-size: 14px;
+}
+body.mobile .wrap { max-width: 100vw; margin: 0; padding: 2vw;}
+body.mobile .row { flex-direction: column; gap: 0;}
+body.mobile .col.card { min-width: 0; padding: 10px;}
+body.mobile #inventoryGrid { font-size: 11px; padding: 4px;}
+body.mobile th, body.mobile td { font-size: 11px; padding: 4px;}
+body.mobile #storesModal { min-width:0; width:95vw; }
+body.mobile .small, body.mobile button, body.mobile input { font-size:14px;}
+body.mobile label { font-size:15px;}
+body.mobile h1 { font-size:20px;}
+body.mobile .card { padding:6px;}
+body.mobile .list { max-height:140px;}
+body.mobile .actions { flex-direction:column;gap:4px;}
+body.mobile footer { font-size:12px;}
+body.mobile #missingStoresCard { font-size:13px;padding:8px;}
+@media (max-width: 600px) {
+  .wrap { padding: 2vw; }
+  .row { flex-direction: column; gap: 0; }
+  .col.card { min-width: 0; padding: 10px;}
+  #inventoryGrid { font-size: 11px; padding: 4px;}
+  th,td { font-size: 11px; padding: 4px;}
+  #storesModal { min-width:0; width:95vw; }
+  .small, button, input { font-size:14px;}
+  label { font-size:15px;}
+  h1 { font-size:20px;}
+  .card { padding:6px;}
+  .list { max-height:140px;}
+  .actions { flex-direction:column;gap:4px;}
+  footer { font-size:12px;}
+  #missingStoresCard { font-size:13px;padding:8px;}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Joe Valadez Inventory</h1>
+  <button id="storesBtn" title="Edit known stores">&#128203; Stores</button>
+</header>
+
+<main class="wrap">
+  <div id="missingStoresCard" style="display:none"></div>
+  <div class="row" style="align-items:flex-start">
+    <div class="col card" style="max-width:420px">
+      <label for="templateFile">Import Inventory Template</label>
+      <input id="templateFile" type="file" accept=".xls,.xlsx,.csv" />
+      <div class="actions" style="margin-top:10px">
+        <button id="importTemplateBtn" class="small">Import Template</button>
+      </div>
+      <div id="templateStatus"></div>
+      <hr style="margin:12px 0">
+      <label for="files">Import Inventory Forms (Multiple Allowed)</label>
+      <input id="files" type="file" accept=".xls,.xlsx,.csv" multiple />
+      <div class="actions" style="margin-top:10px">
+        <button id="clearBtn" class="small ghost">Clear all imported</button>
+      </div>
+    </div>
+    <div class="col card">
+      <label>Imported Stores & File Names</label>
+      <div id="importPreview" class="list" style="min-height:60px"></div>
+      <div class="actions" style="margin-top:10px">
+        <button id="aggregateBtn" class="small">Create Database</button>
+        <button id="downloadJsonBtn" class="small ghost">Download Database</button>
+        <button id="loadJsonBtn" class="small ghost">Upload Database</button>
+        <input id="loadJsonFile" type="file" accept=".json" style="display:none" />
+      </div>
+      <hr style="margin:12px 0">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="pdfFoilBtn" class="small">Generate Foil Pan Order</button>
+        <button id="pdfInvBtn" class="small">Generate Inventory PDF</button>
+      </div>
+      <div style="margin-top:10px">
+        <div class="status" id="status">Ready.</div>
+      </div>
+    </div>
+  </div>
+  <hr style="margin:18px 0">
+  <section>
+    <h3 style="margin:0 0 8px 0">Current Imported Inventory</h3>
+    <div class="card" style="padding:10px">
+      <div id="inventoryGrid" style="max-height:420px;overflow:auto">No inventory aggregated yet.</div>
+    </div>
+    <footer>
+      Tip: open this page locally (no server required). Files are processed in your browser and not uploaded anywhere.
+    </footer>
+  </section>
+</main>
+
+<div id="storesModalOverlay">
+  <div id="storesModal">
+    <h2>Edit Known Stores</h2>
+    <div>
+      <input id="newStoreModal" placeholder="e.g. 018" style="width:80px;margin-right:8px" />
+      <button id="addStoreModal" class="small ghost">Add</button>
+    </div>
+    <div id="storesModalList" class="modal-list"></div>
+    <div class="modal-actions">
+      <button id="closeStoresModal" class="small ghost">Close</button>
+      <button id="exportStoresModal" class="small">Export Known Stores</button>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:#666">
+      Changes are saved for this browser/device. Export to update your HTML file's default store list.
+    </div>
+  </div>
+</div>
+
+<script>
+// --- All helpers and state as before ---
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+if (isMobileDevice()) {
+  document.body.classList.add('mobile');
+} else {
+  document.body.classList.add('desktop');
+}
+
+const defaultStores = ["001","003","004","005","007","008","010","011","012","014","015","017","018","019","201","202","203","204","206","207","208","209","211","214","215","216","217"];
+const LS_KEY = "joeValadezInventoryStores";
+function loadKnownStores() {
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) return new Set(JSON.parse(saved));
+  } catch(e){}
+  return new Set(defaultStores);
+}
+function saveKnownStores(set) {
+  localStorage.setItem(LS_KEY, JSON.stringify(Array.from(set)));
+}
+let knownStores = loadKnownStores();
+
+let importedFiles = [];
+let aggregated = null;
+let inventoryGridState = null;
+let templateRows = null;
+
+function getFormattedDateForFilename() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+
+// UI refs
+const filesEl = document.getElementById('files');
+const clearBtn = document.getElementById('clearBtn');
+const importPreview = document.getElementById('importPreview');
+const aggregateBtn = document.getElementById('aggregateBtn');
+const inventoryGrid = document.getElementById('inventoryGrid');
+const statusEl = document.getElementById('status');
+const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+const loadJsonBtn = document.getElementById('loadJsonBtn');
+const loadJsonFile = document.getElementById('loadJsonFile');
+const pdfFoilBtn = document.getElementById('pdfFoilBtn');
+const pdfInvBtn = document.getElementById('pdfInvBtn');
+const missingStoresCard = document.getElementById('missingStoresCard');
+
+// Template UI
+const templateFileEl = document.getElementById('templateFile');
+const importTemplateBtn = document.getElementById('importTemplateBtn');
+const templateStatus = document.getElementById('templateStatus');
+
+// Known stores modal refs
+const storesBtn = document.getElementById('storesBtn');
+const storesModalOverlay = document.getElementById('storesModalOverlay');
+const storesModal = document.getElementById('storesModal');
+const storesModalList = document.getElementById('storesModalList');
+const addStoreModal = document.getElementById('addStoreModal');
+const newStoreModal = document.getElementById('newStoreModal');
+const closeStoresModal = document.getElementById('closeStoresModal');
+const exportStoresModal = document.getElementById('exportStoresModal');
+
+function renderStoresModal(){
+  storesModalList.innerHTML = '';
+  Array.from(knownStores).sort().forEach(s=>{
+    const div = document.createElement('div');
+    div.style.display='flex';
+    div.style.justifyContent='space-between';
+    div.style.alignItems='center';
+    div.style.padding='4px 8px';
+    div.style.borderBottom='1px solid #f1f5fb';
+    div.innerHTML = `<div style="font-family:monospace">${s}</div><button class="ghost small" data-store="${s}">Remove</button>`;
+    storesModalList.appendChild(div);
+  });
+  storesModalList.querySelectorAll('button').forEach(b=>{
+    b.onclick = ()=>{
+      knownStores.delete(b.dataset.store);
+      saveKnownStores(knownStores);
+      renderStoresModal();
+      if(aggregated) renderInventoryGrid(aggregated);
+    };
+  });
+}
+storesBtn.onclick = ()=>{
+  renderStoresModal();
+  storesModalOverlay.style.display='flex';
+  newStoreModal.value='';
+};
+closeStoresModal.onclick = ()=> storesModalOverlay.style.display='none';
+storesModalOverlay.onclick = (e)=>{ if(e.target===storesModalOverlay) storesModalOverlay.style.display='none'; };
+addStoreModal.onclick = ()=>{
+  const v = (newStoreModal.value||'').trim();
+  if(!v) return;
+  const num = v.replace(/\D/g,'');
+  const store = num.length===0 ? v : num.padStart(3,'0');
+  knownStores.add(store);
+  saveKnownStores(knownStores);
+  newStoreModal.value='';
+  renderStoresModal();
+  if(aggregated) renderInventoryGrid(aggregated);
+};
+exportStoresModal.onclick = ()=>{
+  const arr = Array.from(knownStores).sort();
+  const blob = new Blob([JSON.stringify(arr,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'known_stores.json';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+clearBtn.onclick = ()=>{
+  importedFiles = [];
+  importPreview.innerHTML = '';
+  status('Cleared imported files.', 'ok');
+  inventoryGrid.textContent = 'No inventory aggregated yet.';
+  missingStoresCard.style.display = 'none';
+};
+
+function status(txt, cls){
+  statusEl.textContent = txt;
+  statusEl.className = cls ? cls : '';
+}
+
+// Find last row with data in a given column, within a max range
+function findLastNonEmptyRow(ws, col, firstRow, maxRows) {
+  let last = firstRow - 1;
+  for (let r = firstRow; r < firstRow + maxRows; r++) {
+    const val = cellValue(ws, col + r);
+    if (val !== null && String(val).trim() !== "") last = r;
+  }
+  return last > firstRow - 1 ? last : (firstRow + maxRows - 1);
+}
+
+importTemplateBtn.onclick = async ()=>{
+  const file = templateFileEl.files[0];
+  if(!file){ templateStatus.textContent = 'No template file selected.'; templateStatus.style.color='#c0392b'; return; }
+  try{
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, {type:'array'});
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    templateRows = [];
+const firstRow = 8, maxRows = 37;
+const lastRow = findLastNonEmptyRow(sheet, 'C', firstRow, maxRows);
+for (let r = firstRow; r <= lastRow; r++) {
+  const pack = cellValue(sheet, 'A' + r);
+  const size = cellValue(sheet, 'B' + r);
+  const desc = cellValue(sheet, 'C' + r);
+  templateRows.push({
+    pack: pack === null ? '-' : String(pack),
+    size: size === null ? '-' : String(size),
+    description: desc === null ? '-' : String(desc)
+  });
+}
+
+    if(templateRows.length === 0) throw new Error('No template rows found in selected file.');
+    templateStatus.textContent = `Imported ${templateRows.length} template rows.`;
+    templateStatus.style.color='#0b8f3b';
+  }catch(e){
+    templateStatus.textContent = 'Failed to import template: ' + e.toString();
+    templateStatus.style.color='#c0392b';
+    templateRows = null;
+  }
+};
+
+filesEl.onchange = async ()=>{
+  const list = filesEl.files;
+  if(!list || list.length===0){ status('No files selected to import.', 'error'); return; }
+  status('Importing files...');
+  importedFiles = [];
+  // Track lastModified time for each file
+  for(const f of list){
+    try{
+      const buffer = await f.arrayBuffer();
+      const wb = XLSX.read(buffer, {type:'array'});
+      const entry = {name: f.name, workbook: wb, parsed: null, warnings: [], lastModified: f.lastModified || 0};
+      entry.parsed = parseWorkbook(wb);
+      importedFiles.push(entry);
+    } catch(err){
+      importedFiles.push({name:f.name, error:err.toString(), lastModified: f.lastModified || 0});
+      console.error('Import error', err);
+    }
+  }
+  renderImportedPreview();
+  status('Import completed. You may begin creating the database now.');
+};
+
+function renderImportedPreview(){
+  importPreview.innerHTML = '';
+  importedFiles.forEach((it, idx)=>{
+    const cont = document.createElement('div');
+    cont.style.padding='4px 0';
+    cont.style.borderBottom='1px solid #f1f5fb';
+    if(it.error){
+      cont.innerHTML = `<span class="filename">${escapeHtml(it.name)}</span> <span class="error">Failed</span>`;
+    } else {
+      const p = it.parsed;
+      let dateStr = '';
+      if (it.lastModified) {
+        const d = new Date(it.lastModified);
+        dateStr = ` <span style="color:#999;font-size:11px;">(${d.toLocaleDateString()} ${d.toLocaleTimeString()})</span>`;
+      }
+      cont.innerHTML = `<span class="filename">${escapeHtml(it.name)}</span> <span class="store">${p.storeNumber||'—'}</span>${dateStr}`;
+    }
+    importPreview.appendChild(cont);
+  });
+}
+
+function cellValue(ws, addr){
+  const v = ws[addr];
+  if(!v) return null;
+  return (v.v===undefined || v.v===null) ? null : v.v;
+}
+
+function parseWorkbook(wb) {
+  const sheetNames = wb.SheetNames;
+  function findSheetByKeywords(keys){
+    keys = keys.map(k=>k.toLowerCase());
+    for(const n of sheetNames){
+      const l = n.toLowerCase();
+      if(keys.some(k=>l.includes(k))) return wb.Sheets[n];
+    }
+    return null;
+  }
+  let templateWs = findSheetByKeywords(['template','pack','description']) || wb.Sheets[sheetNames[0]];
+  let invWs = findSheetByKeywords(['inventory','inv','store']) || wb.Sheets[sheetNames[1]] || templateWs;
+  const parsed = { storeNumber: null, templateRows: 0, quantityRows: 0, foilItems: [], template: [] , quantities: [] , warnings: [] };
+
+  // Always read exactly rows 8-37 (inclusive; 30 rows)
+  try {
+for (let r = 8; r <= 37; r++) {
+  const pack = cellValue(templateWs, 'A' + r);
+  const size = cellValue(templateWs, 'B' + r);
+  const desc = cellValue(templateWs, 'C' + r);
+  parsed.template.push({
+    pack: pack === null ? '-' : String(pack),
+    size: size === null ? '-' : String(size),
+    description: desc === null ? '-' : String(desc)
+  });
+}
+
+    parsed.templateRows = parsed.template.length;
+  } catch(e) {
+    parsed.warnings.push('Template read failed: '+e.toString());
+  }
+  try {
+    let s = cellValue(invWs, 'G3');
+    if((s===null || s===undefined) && templateWs!==invWs){
+      s = cellValue(templateWs, 'G3');
+    }
+    if(s!==null && s!==undefined) {
+      s = String(s).trim();
+      const num = s.replace(/\D/g,'');
+      parsed.storeNumber = num.length>0 ? num.padStart(3,'0') : s;
+    } else {
+      parsed.warnings.push('Store number (G3) not found');
+    }
+    // Always read D8:D37 (30 rows)
+let quantities = [];
+for (let r = 8; r <= 37; r++) {
+  const q = cellValue(invWs, 'D' + r);
+  quantities.push(
+    (q === null || q === undefined) ? '-' : (isNaN(q) ? String(q) : Number(q))
+  );
+}
+parsed.quantities = quantities;
+
+    parsed.quantityRows = quantities.length;
+    // G8:G11 for foil
+    const foil = [];
+    for(let r=8;r<=11;r++){
+      const val = cellValue(invWs, 'G'+r);
+      foil.push(val===null||val===undefined ? null : String(val));
+    }
+    parsed.foilItems = foil;
+  } catch(e) {
+    parsed.warnings.push('Inventory read failed: '+e.toString());
+  }
+  return parsed;
+}
+
+// Aggregate imported files into final JSON using templateRows (pad quantities to template length)
+aggregateBtn.onclick = ()=>{
+  if(importedFiles.length===0){ status('No imported files to aggregate.', 'error'); return; }
+  if(!templateRows || templateRows.length===0){ status('No template imported. Please import template file.', 'error'); return; }
+  let masterTemplate = templateRows;
+  // --- Filter for unique stores, prefer latest file by lastModified ---
+  const storeMap = {};
+  importedFiles.forEach(it=>{
+    if(it.error || !it.parsed || !it.parsed.storeNumber) return;
+    const storeNum = it.parsed.storeNumber;
+    if (!storeMap[storeNum] || (it.lastModified > storeMap[storeNum].lastModified)) {
+      storeMap[storeNum] = it;
+    }
+  });
+  const data = {};
+  Object.keys(storeMap).forEach(storeNum=>{
+    const it = storeMap[storeNum];
+    const p = it.parsed;
+    if(!knownStores.has(storeNum)){
+      p.warnings.push(`Store ${storeNum} not found in known store list. You may add it to include in master reports.`);
+    }
+    // Always match quantities length to template!
+    const qty = [];
+    for(let i=0; i<masterTemplate.length; i++){
+      qty.push((p.quantities && p.quantities[i]!==undefined) ? p.quantities[i] : null);
+    }
+    data[storeNum] = {
+      storeNumber: storeNum,
+      foil: p.foilItems.slice(0,4),
+      quantities: qty,
+      sourceFile: it.name,
+      lastModified: it.lastModified
+    };
+  });
+  aggregated = {
+    stores: Object.keys(data).sort(),
+    knownStores: Array.from(knownStores).sort(),
+    templateItems: masterTemplate,
+    data,
+    rowRange: {start:8, end:8+masterTemplate.length-1},
+    foilRange: {start:8,end:11}
+  };
+  renderInventoryGrid(aggregated);
+  showMissingStores(aggregated);
+  status('Aggregated inventory ready.', 'ok');
+  downloadJsonBtn.disabled = false;
+};
+
+function showMissingStores(agg){
+  if(!agg || !agg.knownStores || !agg.stores) {
+    missingStoresCard.style.display = 'none';
+    return;
+  }
+  const missing = agg.knownStores.filter(store=>!agg.stores.includes(store));
+  if(missing.length === 0){
+    missingStoresCard.style.display = 'none';
+    return;
+  }
+  missingStoresCard.style.display = '';
+  missingStoresCard.innerHTML = `<b>The following stores are missing from the inventory:</b><ul>${missing.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ul>`;
+}
+
+downloadJsonBtn.onclick = ()=>{
+  if(!aggregated){ status('No aggregated JSON to download.', 'error'); return; }
+  const blob = new Blob([JSON.stringify(aggregated,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'aggregated_inventory.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  status('JSON downloaded.', 'ok');
+};
+
+loadJsonBtn.onclick = ()=> loadJsonFile.click();
+loadJsonFile.onchange = async (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const text = await f.text();
+  try{
+    aggregated = JSON.parse(text);
+    renderInventoryGrid(aggregated);
+    showMissingStores(aggregated);
+    status('Loaded JSON from file.', 'ok');
+  } catch(err){
+    status('Failed to parse JSON: '+err.toString(), 'error');
+    inventoryGrid.textContent = 'No inventory aggregated yet.';
+    missingStoresCard.style.display = 'none';
+  }
+  e.target.value = '';
+};
+
+async function generateInventoryPDF(agg){
+  if(!agg){ status('No inventory data available to create this report.', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'landscape'});
+
+  const marginLeft = 18;
+  const titleY = 45;
+  const dateY = 45;
+  doc.setFontSize(16);
+  doc.setTextColor(0,0,0);
+  doc.setFont(undefined,'bold');
+  doc.text('Joe Valadez Inventory', marginLeft, titleY);
+
+  // Date on top right, custom format
+  const dateStr = dayjs().format('dddd, MMM D, YYYY');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFontSize(10);
+  doc.setFont(undefined,'normal');
+  doc.text(dateStr, pageWidth - marginLeft, dateY, { align: 'right' });
+
+  let y = titleY + 20;
+
+const stores = agg.stores.length ? agg.stores : agg.knownStores;
+const header = ['Description, Size', ...stores, 'Total'];
+const rows = [];
+const template = agg.templateItems || [];
+const descColWidth = 120;
+
+function numOrNull(v) {
+  if (v === null || v === undefined || v === '' || v === '-') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+template.forEach((t, idx) => {
+  let desc = t.description || '';
+  let size = t.size || '';
+  // If both are "-", leave blank
+  if (desc === '-' && size === '-') {
+    desc = '';
+    size = '';
+  }
+  desc = desc.slice(0, 20);
+  const combined = size ? `${desc}, ${size}` : desc;
+
+  const row = [combined];
+  let total = 0;
+
+  stores.forEach(s => {
+    const entry = agg.data && agg.data[s] ? agg.data[s] : null;
+    const q = entry && entry.quantities && entry.quantities[idx] !== undefined
+      ? entry.quantities[idx]
+      : '-';
+
+    const n = numOrNull(q);
+    if (n === null) {
+      row.push('');
+    } else {
+      row.push(n);
+      total += n;
+    }
+  });
+
+  row.push(total);
+  rows.push(row);
+});
+
+
+  doc.autoTable({
+    head: [header],
+    body: rows,
+    startY: y,
+    styles: {
+      fontSize:8,
+      cellPadding:3,
+      halign:'center',
+      valign:'middle',
+      textColor:[0,0,0],
+      cellWidth: 'auto',
+      minCellHeight: 16,
+      overflow: 'linebreak',
+    },
+    headStyles: { fillColor: [230,235,255], textColor:[0,0,0], halign:'center' },
+    columnStyles: {
+      0: { halign:'left', cellWidth: descColWidth },
+      [header.length-1]: { fontStyle:'bold' }
+    },
+    margin: { left: marginLeft, right: marginLeft },
+    tableWidth: 'auto'
+  });
+
+  // Append date to file name
+  const filename = `Joe Valadez Inventory ${getFormattedDateForFilename()}.pdf`;
+  doc.save(filename);
+  status(`Inventory PDF generated (${filename}).`, 'ok');
+}
+
+pdfInvBtn.onclick = ()=> {
+  if(!aggregated){ status('No inventory file available. Upload inventory files or a generated inventory database.', 'error'); return; }
+  generateInventoryPDF(aggregated);
+};
+
+async function generateFoilPDF(agg){
+  if(!agg) { status('No inventory data available for this report.', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'portrait'});
+
+  const margin = 40;
+  let y = 40;
+  const runDate = new Date().toLocaleDateString();
+
+  doc.setFontSize(14);
+  doc.text(`Food Town Foil Pan Order - ${runDate}`, doc.internal.pageSize.getWidth()/2, y, { align: 'center' });
+  y += 20;
+
+  const header = ['Store','Small Foil Pans','Large Rectangular Pans','Large Oval Pans','Ultra Foil'];
+  const rows = [];
+  const totals = [0,0,0,0];
+
+  // Fixed store list
+  const fixedStores = [
+    "001","003","004","005","007","008","010","011","012","014","015",
+    "017","018","019","201","202","203","204","206","207","208","209",
+    "211","214","215","216","217"
+  ];
+
+  fixedStores.forEach(s=>{
+    const entry = agg.data && agg.data[s] ? agg.data[s] : null;
+    const foil = entry && entry.foil ? entry.foil : [];
+    const row = [
+      s,
+      foil[0] ? Number(foil[0])||0 : 0,
+      foil[1] ? Number(foil[1])||0 : 0,
+      foil[2] ? Number(foil[2])||0 : 0,
+      foil[3] ? Number(foil[3])||0 : 0
+    ];
+    rows.push(row);
+    for(let i=0;i<4;i++){ totals[i] += row[i+1]; }
+  });
+
+  rows.push(['TOTAL', ...totals]);
+
+  // column widths
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const tableWidth = pageWidth - margin*2;
+  const colWidth = (tableWidth - 60) / 4;
+
+  doc.autoTable({
+    head: [header],
+    body: rows,
+    startY: y,
+    theme: 'grid',
+    styles: {
+      fontSize: 10,
+      halign: 'center',
+      valign: 'middle',
+      textColor: [0,0,0] // black text for all body cells
+    },
+    headStyles: { fillColor: [150, 75, 75], textColor: [255,255,255] }, // maroon header w/ white text
+    columnStyles: {
+      0: { halign:'left', cellWidth: 60 },
+      1: { cellWidth: colWidth },
+      2: { cellWidth: colWidth },
+      3: { cellWidth: colWidth },
+      4: { cellWidth: colWidth }
+    },
+    margin: { left: margin, right: margin },
+    tableWidth: 'auto',
+    didParseCell: function(data){
+      // Hide 0 values (but not totals row)
+      if(data.cell.raw === 0 && data.row.index !== rows.length-1){
+        data.cell.text = '';
+      }
+      // Style totals row
+      if(data.row.index === rows.length-1){
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [245,245,245];
+      }
+    }
+  });
+
+  // filename with date
+  const filename = `Foil_Pan_Order_${getFormattedDateForFilename()}.pdf`;
+  doc.save(filename);
+  status(`Foil Pan Order PDF generated (${filename}).`, 'ok');
+}
+
+pdfFoilBtn.onclick = ()=> {
+  if(!aggregated){ status('No inventory file available. Upload inventory files or a generated inventory database.', 'error'); return; }
+  generateFoilPDF(aggregated);
+};
+
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderInventoryGrid(agg){
+  if(!agg || !agg.templateItems || !agg.stores || !agg.data){
+    inventoryGrid.textContent = 'No inventory data available.';
+    return;
+  }
+  const stores = agg.stores.length ? agg.stores : Array.from(knownStores).sort();
+  const template = agg.templateItems;
+  let header = ['Description / Size'].concat(stores).concat(['Total']);
+  let colWidths = header.map(h=>h.length);
+  let rows = [];
+  template.forEach((t, idx)=>{
+    let desc = t.description || '';
+    if(t.size) desc += ', ' + t.size;
+    if(desc.length < 1) desc = '[No description]';
+    let row = [desc];
+    let total = 0;
+    stores.forEach(s=>{
+      const entry = agg.data && agg.data[s] ? agg.data[s] : null;
+      let val = entry && entry.quantities && entry.quantities[idx]!==undefined ? entry.quantities[idx] : '';
+      if(val===null || val===undefined || val==='') val = '';
+      row.push(val);
+      total += (val!=='' && !isNaN(val)) ? Number(val) : 0;
+    });
+    row.push(total);
+    rows.push(row);
+    row.forEach((cell, i)=>{
+      colWidths[i] = Math.max(colWidths[i], String(cell).length);
+    });
+  });
+
+  inventoryGridState = {agg, stores, template, rows, colWidths};
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-family:inherit;font-size:13px;background:#0f1724;color:#e6f0ff;">';
+  html += '<thead><tr>';
+  header.forEach((h,i)=>{
+    html += `<th style="background:#23304e;color:#fff;border:1px solid #23304e;padding:6px;">${escapeHtml(h)}</th>`;
+  });
+  html += '</tr></thead>';
+  html += '<tbody>';
+  rows.forEach((row,ridx)=>{
+    html += '<tr>';
+    row.forEach((cell,cidx)=>{
+      if(cidx>0 && cidx<row.length-1){
+        html += `<td style="border:1px solid #23304e;padding:6px;text-align:right;cursor:pointer;" data-row="${ridx}" data-col="${cidx}" class="editable-cell">${escapeHtml(cell)}</td>`;
+      } else {
+        html += `<td style="border:1px solid #23304e;padding:6px;text-align:${cidx==0?'left':'right'};">${escapeHtml(cell)}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  inventoryGrid.innerHTML = html;
+
+  inventoryGrid.querySelectorAll('.editable-cell').forEach(td=>{
+    td.onclick = function(e){
+      if(td.querySelector('input')) return;
+      const origVal = td.textContent;
+      td.innerHTML = `<input type="number" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(origVal)}" style="width:60px;" class="cell-editing" />`;
+      const inp = td.querySelector('input');
+      inp.focus();
+      inp.select();
+      inp.onkeydown = function(ev){
+        if(ev.key==='Enter'){
+          inp.blur();
+        }
+      };
+      inp.onblur = function(){
+        let val = inp.value.trim();
+        if(val==='' || isNaN(val)) val = '';
+        td.innerHTML = escapeHtml(val);
+        td.classList.remove('cell-editing');
+        const row = Number(td.dataset.row);
+        const col = Number(td.dataset.col);
+        const storeIdx = col-1;
+        const store = inventoryGridState.stores[storeIdx];
+        if(aggregated && aggregated.data && aggregated.data[store]) {
+          aggregated.data[store].quantities[row] = (val===''?null:Number(val));
+          renderInventoryGrid(aggregated);
+          showMissingStores(aggregated);
+        }
+      };
+    };
+  });
+}
+window.addEventListener('DOMContentLoaded', function() {
+  if(document.body.classList.contains('mobile')) {
+    setTimeout(function(){
+      alert("Tip: For easier editing, rotate your phone to landscape. You can scroll the inventory grid sideways.");
+    }, 1500);
+  }
+});
+</script>
+</body>
+</html>
