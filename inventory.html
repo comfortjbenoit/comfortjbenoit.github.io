@@ -244,8 +244,10 @@ let templateRows = null;
 function getFormattedDateForFilename() {
   const d = new Date();
   const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const yy = String(d.getFullYear()).slice(-2); // last two digits of year
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${yy}`;
 }
+
 
 
 // UI refs
