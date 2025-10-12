@@ -565,7 +565,7 @@ downloadJsonBtn.onclick = ()=>{
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'aggregated_inventory.json';
+  a.download = 'Inventory_File.json';
   a.click();
   URL.revokeObjectURL(url);
   status('JSON downloaded.', 'ok');
