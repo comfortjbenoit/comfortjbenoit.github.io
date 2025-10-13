@@ -386,23 +386,51 @@ for (let r = firstRow; r <= lastRow; r++) {
 filesEl.onchange = async ()=>{
   const list = filesEl.files;
   if(!list || list.length===0){ status('No files selected to import.', 'error'); return; }
+
   status('Importing files...');
-  importedFiles = [];
-  // Track lastModified time for each file
+  // Do NOT clear importedFiles; just add new files that are not already present,
+  // OR replace the file if a newer lastModified version is loaded.
+  let updated = false;
   for(const f of list){
     try{
       const buffer = await f.arrayBuffer();
       const wb = XLSX.read(buffer, {type:'array'});
       const entry = {name: f.name, workbook: wb, parsed: null, warnings: [], lastModified: f.lastModified || 0};
       entry.parsed = parseWorkbook(wb);
-      importedFiles.push(entry);
+
+      // Dedup by storeNumber, but allow replacement if newer lastModified
+      const newStore = entry.parsed && entry.parsed.storeNumber;
+      if (!newStore) {
+        importedFiles.push(entry); // still record error/missing store
+        updated = true;
+        continue;
+      }
+      // Find if this store already exists in importedFiles
+      const idx = importedFiles.findIndex(e => e.parsed && e.parsed.storeNumber === newStore);
+      if(idx === -1) {
+        importedFiles.push(entry);
+        updated = true;
+      } else {
+        // Only replace if new file is newer
+        if(entry.lastModified > (importedFiles[idx].lastModified || 0)) {
+          importedFiles[idx] = entry;
+          updated = true;
+        }
+      }
     } catch(err){
       importedFiles.push({name:f.name, error:err.toString(), lastModified: f.lastModified || 0});
+      updated = true;
       console.error('Import error', err);
     }
   }
-  renderImportedPreview();
-  status('Import completed. You may begin creating the database now.');
+  if(updated) {
+    renderImportedPreview();
+    status('Files imported. You may now aggregate or add more.');
+    // Optionally, if you want auto-aggregation (on every file add), call aggregateBtn.onclick()
+    // aggregateBtn.onclick();
+  } else {
+    status('No new stores added (all already imported).', 'ok');
+  }
 };
 
 function renderImportedPreview(){
