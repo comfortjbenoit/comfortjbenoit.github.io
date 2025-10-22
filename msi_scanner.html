@@ -1,36 +1,357 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MSI Barcode Scanner</title>
-  <script type="module">
-    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/+esm';
-
-    const codeReader = new BrowserMultiFormatReader();
-    window.onload = () => {
-      const videoElement = document.getElementById('video');
-      codeReader.listVideoInputDevices().then(devices => {
-        const deviceId = devices[0]?.deviceId;
-        if (!deviceId) {
-          document.getElementById('output').textContent = 'No camera found.';
-          return;
-        }
-
-        codeReader.decodeFromVideoDevice(deviceId, videoElement, (result, err) => {
-          if (result) {
-            document.getElementById('output').textContent = `Scanned: ${result.getText()}`;
-          } else if (err && !(err instanceof ZXing.NotFoundException)) {
-            console.error(err);
-            document.getElementById('output').textContent = `Error: ${err}`;
-          }
-        });
-      });
-    };
-  </script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>UPC Scanner</title>
+<style>
+  :root { --bg:#0b0c10; --fg:#e9eef3; --muted:#97a1a9; --accent:#3ddc84; --warn:#ffcf33; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:14px 16px; font-weight:600; background:#11151a; border-bottom:1px solid #1f2530; }
+  main { padding:14px 16px; display:grid; gap:12px; }
+  video { width:100%; max-height:50vh; background:#000; border-radius:12px; }
+  canvas { display:none; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  button {
+    appearance:none; border:0; border-radius:10px; padding:12px 14px; font-weight:600;
+    background:#1a2633; color:var(--fg); cursor:pointer;
+  }
+  button.primary { background:var(--accent); color:#012; }
+  button.warn { background:var(--warn); color:#220; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .out {
+    background:#10161e; border:1px solid #243041; border-radius:12px; padding:12px;
+    display:grid; gap:8px;
+  }
+  .kv { display:grid; grid-template-columns:max-content 1fr; gap:6px 10px; align-items:center; }
+  .k { color:var(--muted); }
+  .v { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:1.05rem; word-break:break-all; }
+  .hint { color:var(--muted); font-size:.9rem; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#1d2a38; color:#cfe7ff; font-size:.8rem; margin-right:6px; }
+  .ok { color:#9ef59e; }
+  .bad { color:#ff8a8a; }
+</style>
 </head>
 <body>
-  <h2>MSI Barcode Scanner</h2>
-  <video id="video" width="300" height="200" style="border:1px solid black"></video>
-  <p id="output">Waiting for scan...</p>
+<header>UPC / EAN Camera Scanner</header>
+<main>
+  <video id="preview" playsinline muted></video>
+  <div class="row">
+    <button id="startBtn" class="primary">Start Scanner</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <button id="torchBtn" disabled>Toggle Torch</button>
+    <button id="switchBtn" disabled>Switch Camera</button>
+  </div>
+
+  <div class="out">
+    <div>
+      <span class="pill" id="engine">engine: n/a</span>
+      <span class="pill" id="fmt">format: n/a</span>
+      <span class="pill" id="status">status: idle</span>
+    </div>
+    <div class="kv">
+      <div class="k">Raw:</div><div class="v" id="raw">—</div>
+      <div class="k">Normalized:</div><div class="v" id="normalized">—</div>
+      <div class="k">Type:</div><div class="v" id="type">—</div>
+      <div class="k">Checksum:</div><div class="v" id="checksum">—</div>
+    </div>
+    <div class="row">
+      <button id="copyBtn" disabled>Copy</button>
+      <button id="shareBtn" disabled>Share</button>
+      <button id="clearBtn" disabled>Clear</button>
+    </div>
+    <div class="hint">
+      Tip: UPC-A is 12 digits. The same physical code may also appear as EAN-13 with a leading 0.
+    </div>
+  </div>
+</main>
+
+<!-- ZXing fallback (loaded only if needed) -->
+<script id="zxing-script" defer type="text/plain" src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script>
+(() => {
+  const els = (id => document.getElementById(id));
+  const video = els('preview');
+  const startBtn = els('startBtn');
+  const stopBtn = els('stopBtn');
+  const torchBtn = els('torchBtn');
+  const switchBtn = els('switchBtn');
+  const engine = els('engine');
+  const fmt = els('fmt');
+  const statusEl = els('status');
+  const rawEl = els('raw');
+  const normEl = els('normalized');
+  const typeEl = els('type');
+  const checksumEl = els('checksum');
+  const copyBtn = els('copyBtn');
+  const shareBtn = els('shareBtn');
+  const clearBtn = els('clearBtn');
+
+  let stream = null;
+  let usingNative = false;
+  let usingZXing = false;
+  let detector = null;                // BarcodeDetector
+  let zxingReader = null;             // ZXing BrowserMultiFormatReader
+  let currentDeviceId = null;
+  let devices = [];
+  let torchOn = false;
+  let track = null;
+  let scanLoopAbort = null;
+
+  const SUPPORTED_FORMATS = [
+    'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'
+  ];
+
+  function setStatus(txt, ok=false) {
+    statusEl.textContent = 'status: ' + txt;
+    statusEl.className = ok ? 'pill ok' : 'pill';
+  }
+  function setFmt(txt) { fmt.textContent = 'format: ' + txt; }
+  function setEngine(txt) { engine.textContent = 'engine: ' + txt; }
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880; g.gain.setValueAtTime(0.001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+      o.start(); setTimeout(() => { g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18); o.stop(ctx.currentTime + 0.2); }, 150);
+    } catch {}
+  }
+  function vibrate() { if (navigator.vibrate) navigator.vibrate(60); }
+
+  function upcNormalize(format, text) {
+    // Normalize EAN-13 that starts with '0' to UPC-A (drop the leading 0)
+    let normalized = text, label = format.toUpperCase();
+    if ((format === 'ean-13' || format === 'ean_13') && text?.length === 13 && text.startsWith('0')) {
+      normalized = text.slice(1);
+      label = 'UPC-A (from EAN-13)';
+    } else if (format === 'upc_a' || format === 'UPC_A') {
+      label = 'UPC-A';
+    } else if (format === 'ean-13' || format === 'ean_13') {
+      label = 'EAN-13';
+    } else if (format === 'upc_e' || format === 'UPC_E') {
+      label = 'UPC-E';
+    }
+    return { normalized, label };
+  }
+
+  function luhnLikeEAN13Valid(s) {
+    if (!/^\d{13}$/.test(s)) return false;
+    const digits = s.split('').map(d=>+d);
+    let sum = 0;
+    for (let i=0;i<12;i++){
+      sum += digits[i] * ((i%2===0)?1:3);
+    }
+    const check = (10 - (sum % 10)) % 10;
+    return check === digits[12];
+  }
+
+  function showResult(format, text) {
+    const fmtKey = (typeof format === 'string' ? format : (format?.format || '')).toString();
+    const fmtHuman = fmtKey.replace(/_/g,'-').toLowerCase();
+    setFmt(fmtHuman || 'n/a');
+
+    const { normalized, label } = upcNormalize(fmtHuman, text);
+    rawEl.textContent = text || '—';
+    normEl.textContent = normalized || '—';
+    typeEl.textContent = label;
+
+    let checksumInfo = 'n/a';
+    if (/^\d{13}$/.test(text)) checksumInfo = luhnLikeEAN13Valid(text) ? 'valid (EAN-13)' : 'invalid (EAN-13)';
+    if (/^\d{12}$/.test(normalized)) {
+      // For UPC-A, EAN-13 validity of "0"+upc is a common proxy; optional:
+      const eanCandidate = '0' + normalized;
+      checksumInfo = luhnLikeEAN13Valid(eanCandidate) ? 'valid (UPC-A via EAN-13 check)' : 'invalid (UPC-A via EAN-13 check)';
+    }
+    checksumEl.textContent = checksumInfo;
+
+    copyBtn.disabled = shareBtn.disabled = clearBtn.disabled = false;
+    beep(); vibrate();
+  }
+
+  function enableControls(active) {
+    startBtn.disabled = active;
+    stopBtn.disabled = !active;
+    switchBtn.disabled = !active || devices.length < 2;
+    torchBtn.disabled = !active;
+  }
+
+  async function getDevices() {
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return all.filter(d => d.kind === 'videoinput');
+  }
+
+  async function startStream(deviceId=null) {
+    const constraints = {
+      audio: false,
+      video: {
+        facingMode: deviceId ? undefined : { ideal: 'environment' },
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    await video.play().catch(()=>{});
+    track = stream.getVideoTracks()[0] || null;
+    return stream;
+  }
+
+  async function stopStream() {
+    if (scanLoopAbort) { scanLoopAbort.abort(); scanLoopAbort = null; }
+    if (zxingReader) { try { await zxingReader.stopContinuousDecode(); } catch {} }
+    if (track) { try { track.stop(); } catch {} }
+    if (stream) { stream.getTracks().forEach(t=>t.stop()); }
+    stream = null; track = null; torchOn = false;
+    usingZXing = false; usingNative = false; detector = null;
+    setEngine('n/a'); setFmt('n/a'); setStatus('idle');
+    enableControls(false);
+    torchBtn.textContent = 'Toggle Torch';
+    torchBtn.disabled = true;
+  }
+
+  async function toggleTorch() {
+    if (!track) return;
+    const caps = track.getCapabilities?.();
+    if (!caps || !caps.torch) { setStatus('torch not supported'); return; }
+    torchOn = !torchOn;
+    await track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(()=>{});
+    torchBtn.textContent = torchOn ? 'Torch: On' : 'Torch: Off';
+  }
+
+  async function switchCamera() {
+    if (!devices.length) return;
+    const idx = devices.findIndex(d => d.deviceId === currentDeviceId);
+    const next = devices[(idx + 1) % devices.length];
+    await stopStream();
+    currentDeviceId = next.deviceId;
+    await beginScan(true);
+  }
+
+  function loadZXingIfNeeded() {
+    return new Promise((resolve, reject) => {
+      if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) return resolve();
+      const script = document.getElementById('zxing-script').cloneNode();
+      script.type = "text/javascript";
+      script.onload = () => resolve();
+      script.onerror = e => reject(e);
+      document.body.appendChild(script);
+    });
+  }
+
+  async function scanWithNative() {
+    setEngine('BarcodeDetector');
+    usingNative = true;
+    detector = new BarcodeDetector({ formats: SUPPORTED_FORMATS });
+    scanLoopAbort = new AbortController();
+
+    const loop = async () => {
+      if (!video.videoWidth) { await new Promise(r=>setTimeout(r,60)); return requestAnimationFrame(loop); }
+      try {
+        const barcodes = await detector.detect(video);
+        if (barcodes?.length) {
+          const b = barcodes[0];
+          showResult(b.format, b.rawValue || b.rawValue ?? b.data);
+        }
+      } catch (e) {
+        // swallow transient errors
+      }
+      if (!scanLoopAbort.signal.aborted) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+
+  async function scanWithZXing() {
+    setEngine('ZXing');
+    usingZXing = true;
+    await loadZXingIfNeeded();
+    const { BrowserMultiFormatReader, NotFoundException } = ZXingBrowser;
+    zxingReader = new BrowserMultiFormatReader();
+    await zxingReader.decodeFromVideoDevice(
+      currentDeviceId ?? null,
+      video,
+      (res, err) => {
+        if (res) {
+          showResult(res.getBarcodeFormat?.() ?? 'unknown', res.getText?.() ?? '');
+        } else if (err && !(err instanceof NotFoundException)) {
+          // non-“not found” errors
+          setStatus('error: ' + (err.message || err));
+        }
+      }
+    );
+  }
+
+  async function beginScan(resume=false) {
+    try {
+      setStatus('requesting camera…');
+      if (!resume) devices = await getDevices();
+      // Pick a likely back camera
+      let cand = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[devices.length-1];
+      currentDeviceId = cand?.deviceId ?? null;
+
+      await startStream(currentDeviceId);
+      enableControls(true);
+      setStatus('scanning…', true);
+
+      // Torch capability?
+      const caps = track?.getCapabilities?.();
+      torchBtn.disabled = !(caps && 'torch' in caps);
+      if (!torchBtn.disabled) torchBtn.textContent = 'Torch: Off';
+
+      // Choose engine
+      if ('BarcodeDetector' in window && await BarcodeDetector.getSupportedFormats?.().then(f=>f?.length>0).catch(()=>false)) {
+        await scanWithNative();
+      } else {
+        await scanWithZXing();
+      }
+    } catch (e) {
+      setStatus('camera error');
+      console.error(e);
+      alert('Could not start camera: ' + (e.message || e));
+      enableControls(false);
+    }
+  }
+
+  // UI events
+  startBtn.addEventListener('click', () => beginScan(false));
+  stopBtn.addEventListener('click', stopStream);
+  torchBtn.addEventListener('click', toggleTorch);
+  switchBtn.addEventListener('click', switchCamera);
+
+  copyBtn.addEventListener('click', async () => {
+    const text = normEl.textContent?.trim();
+    if (!text || text === '—') return;
+    await navigator.clipboard.writeText(text).catch(()=>{});
+    setStatus('copied "'+text+'"', true);
+  });
+  shareBtn.addEventListener('click', async () => {
+    const text = normEl.textContent?.trim();
+    if (!text || text === '—') return;
+    if (navigator.share) {
+      try { await navigator.share({ title:'UPC', text, url: '' }); setStatus('shared', true); }
+      catch {}
+    } else {
+      setStatus('Web Share not available'); alert(text);
+    }
+  });
+  clearBtn.addEventListener('click', () => {
+    rawEl.textContent = normEl.textContent = typeEl.textContent = checksumEl.textContent = '—';
+    setFmt('n/a'); setStatus('cleared');
+  });
+
+  // Ask for camera permission early on tap
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') stopStream();
+  });
+
+  // Enable switch camera once we know device count
+  navigator.mediaDevices?.enumerateDevices?.().then(list => {
+    devices = list.filter(d=>d.kind==='videoinput');
+    switchBtn.disabled = devices.length < 2;
+  });
+})();
+</script>
 </body>
 </html>
