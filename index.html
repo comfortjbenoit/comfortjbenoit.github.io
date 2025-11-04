@@ -1,790 +1,207 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Joe Valadez Inventory</title>
-
-<!-- CDN libs -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-
-<!-- dayjs for formatting date -->
-<script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/plugin/advancedFormat.js"></script>
-<script>
-  dayjs.extend(window.dayjs_plugin_advancedFormat);
-</script>
-
-<style>
-  :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; --accent:#0b69ff;}
-  body{margin:0;background:#f6f8fb;color:#111}
-  header{background:linear-gradient(90deg,#ffffff, #eef4ff);padding:18px 24px;border-bottom:1px solid #e3e8f5;display:flex;justify-content:space-between;align-items:center;}
-  h1{margin:0;font-size:18px}
-  .wrap{max-width:1100px;margin:22px auto;padding:18px;background:#fff;border-radius:12px;box-shadow:0 6px 20px rgba(12,20,60,0.06)}
-  .row{display:flex;gap:12px;flex-wrap:wrap}
-  .col{flex:1;min-width:240px}
-  label{display:block;font-size:13px;color:#4b5563;margin-bottom:6px}
-  input,select,button,textarea{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #d6dbe9;background:#fff}
-  button{background:var(--accent);color:#fff;border:none;padding:10px 12px;border-radius:8px;cursor:pointer}
-  button.ghost{background:#eef3ff;color:var(--accent);border:1px solid #d6e4ff}
-  .small{font-size:13px;padding:6px 8px}
-  .card{padding:12px;border-radius:10px;background:#fbfdff;border:1px solid #eef2fb}
-  .list{max-height:220px;overflow:auto;padding:6px;border-radius:8px;background:#fff;border:1px solid #e6eaf3}
-  table{border-collapse:collapse;width:100%}
-  th,td{padding:6px;border:1px solid #e6eaf3;text-align:left;font-size:13px}
-  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  footer{font-size:13px;color:#556; margin-top:12px}
-  .status{font-size:13px;color:#0b69ff}
-  .error{color:#c0392b}
-  .ok{color:#0b8f3b}
-  pre{background:#0f1724;color:#e6f0ff;padding:10px;border-radius:8px;overflow:auto}
-  #inventoryGrid { 
-    font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', monospace;
-    font-size: 13px;
-    background: #0f1724;
-    color: #e6f0ff;
-    padding: 10px;
-    border-radius: 8px;
-    overflow-x: auto;
-    max-height: 420px;
-    white-space: pre;
-  }
-  #inventoryGrid .cell-editing {
-    background: #fffbe7;
-    color: #222;
-    outline: 2px solid #0b69ff;
-  }
-  #importPreview .filename {
-    font-size: 12px;
-    color: #34495e;
-    font-family: monospace;
-  }
-  #importPreview .store {
-    font-size: 13px;
-    color: #0b69ff;
-    font-family: monospace;
-    margin-left: 10px;
-  }
-  #storesModalOverlay {
-    position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(32,40,60,0.18);display:none;align-items:center;justify-content:center;z-index:1000;
-  }
-  #storesModal {
-    background:#fff;border-radius:12px;box-shadow:0 6px 30px rgba(12,20,60,0.15);padding:24px;min-width:320px;
-    max-width:98vw;
-  }
-  #storesModal h2 {
-    font-size:16px;margin:0 0 8px 0
-  }
-  #storesModal .modal-list {
-    max-height:180px;overflow:auto;margin-bottom:8px;border-radius:8px;background:#f6f7fa;border:1px solid #e6eaf3;padding:6px;
-  }
-  #storesModal .modal-actions {
-    display:flex;gap:8px;margin-top:12px;
-  }
-  #storesBtn {
-    background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;float:right;min-width:44px;min-height:30px;
-  }
-  #templateStatus {
-    font-size:12px;
-    margin:8px 0;
-  }
-  #missingStoresCard {
-    background: #fffbe7;
-    border: 1px solid #f1c40f;
-    color: #c0392b;
-    margin: 0 0 18px 0;
-    border-radius: 8px;
-    padding: 12px;
-    font-size: 15px;
-  }
-  #missingStoresCard ul {
-    margin: 8px 0 0 0;
-    padding: 0 0 0 18px;
-  }
-  #missingStoresCard ul li {
-    font-family:monospace;
-    color: #c0392b;
-    font-size: 14px;
-  }
-  body.mobile .wrap { max-width: 100vw; margin: 0; padding: 2vw;}
-  body.mobile .row { flex-direction: column; gap: 0;}
-  body.mobile .col.card { min-width: 0; padding: 10px;}
-  body.mobile #inventoryGrid { font-size: 11px; padding: 4px;}
-  body.mobile th, body.mobile td { font-size: 11px; padding: 4px;}
-  body.mobile #storesModal { min-width:0; width:95vw; }
-  body.mobile .small, body.mobile button, body.mobile input { font-size:14px;}
-  body.mobile label { font-size:15px;}
-  body.mobile h1 { font-size:20px;}
-  body.mobile .card { padding:6px;}
-  body.mobile .list { max-height:140px;}
-  body.mobile .actions { flex-direction:column;gap:4px;}
-  body.mobile footer { font-size:12px;}
-  body.mobile #missingStoresCard { font-size:13px;padding:8px;}
-  @media (max-width: 600px) {
-    .wrap { padding: 2vw; }
-    .row { flex-direction: column; gap: 0; }
-    .col.card { min-width: 0; padding: 10px;}
-    #inventoryGrid { font-size: 11px; padding: 4px;}
-    th,td { font-size: 11px; padding: 4px;}
-    #storesModal { min-width:0; width:95vw; }
-    .small, button, input { font-size:14px;}
-    label { font-size:15px;}
-    h1 { font-size:20px;}
-    .card { padding:6px;}
-    .list { max-height:140px;}
-    .actions { flex-direction:column;gap:4px;}
-    footer { font-size:12px;}
-    #missingStoresCard { font-size:13px;padding:8px;}
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard • Dark Pop</title>
+  <meta name="color-scheme" content="dark light" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind on-the-fly config (for playful neon accents)
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "Noto Sans", "sans-serif"],
+          },
+          boxShadow: {
+            glow: "0 0 20px rgba(56,189,248,.35)",
+          },
+          backgroundImage: {
+            'grid': "linear-gradient(to right, rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,.05) 1px, transparent 1px)",
+            'radial-glow': "radial-gradient(1000px 600px at 20% -10%, rgba(34,211,238,.15), transparent 60%), radial-gradient(1000px 600px at 80% -10%, rgba(249,115,22,.15), transparent 60%)",
+          },
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
-<body>
-<header>
-  <h1>Joe Valadez Inventory</h1>
-  <button id="storesBtn" title="Edit known stores">&#128203; Stores</button>
-</header>
+<body class="min-h-screen bg-slate-950 text-slate-200 font-display selection:bg-cyan-500/30 selection:text-white">
+  <!-- Decorative background -->
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 bg-radial-glow [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]"></div>
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 bg-grid bg-[size:40px_40px]"></div>
 
-<main class="wrap">
-  <div id="missingStoresCard" style="display:none"></div>
-  <div class="row" style="align-items:flex-start">
-    <div class="col card" style="max-width:420px">
-      <label for="templateFile">Import Template File (Required, .xlsx/.csv)</label>
-      <input id="templateFile" type="file" accept=".xls,.xlsx,.csv" />
-      <div class="actions" style="margin-top:10px">
-        <button id="importTemplateBtn" class="small">Import Template</button>
-      </div>
-      <div id="templateStatus"></div>
-      <hr style="margin:12px 0">
-      <label for="files">Import Inventory Forms (Multiple Allowed)</label>
-      <input id="files" type="file" accept=".xls,.xlsx,.csv" multiple />
-      <div class="actions" style="margin-top:10px">
-        <button id="clearBtn" class="small ghost">Clear all imported</button>
-      </div>
-    </div>
-    <div class="col card">
-      <label>Imported files & store preview</label>
-      <div id="importPreview" class="list" style="min-height:60px"></div>
-      <div class="actions" style="margin-top:10px">
-        <button id="aggregateBtn" class="small">Create Database</button>
-        <button id="downloadJsonBtn" class="small ghost">Download Database</button>
-        <button id="loadJsonBtn" class="small ghost">Upload Database</button>
-        <input id="loadJsonFile" type="file" accept=".json" style="display:none" />
-      </div>
-      <hr style="margin:12px 0">
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="pdfFoilBtn" class="small">Generate Foil Pan Order</button>
-        <button id="pdfInvBtn" class="small">Generate Inventory PDF</button>
-      </div>
-      <div style="margin-top:10px">
-        <div class="status" id="status">Ready.</div>
+  <header class="relative">
+    <div class="mx-auto max-w-7xl px-6 pt-8 pb-4">
+      <div class="flex items-center justify-between gap-4">
+        <a href="#" class="group inline-flex items-center gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 rounded-xl">
+          <span class="inline-grid place-items-center size-10 rounded-xl bg-gradient-to-br from-cyan-500 to-fuchsia-500 text-white shadow-glow">
+            <!-- Spark icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+              <path d="M11.645 1.91a.75.75 0 0 1 .71 0l2.31 1.2 1.2 2.31a.75.75 0 0 1 0 .71l-1.2 2.31-2.31 1.2a.75.75 0 0 1-.71 0l-2.31-1.2-1.2-2.31a.75.75 0 0 1 0-.71l1.2-2.31 2.31-1.2zM5.25 13.5a.75.75 0 0 1 .335-.63l1.915-1.277 1.277-1.915a.75.75 0 0 1 1.256 0l1.277 1.915 1.915 1.277a.75.75 0 0 1 0 1.256l-1.915 1.277-1.277 1.915a.75.75 0 0 1-1.256 0L7.5 16.033l-1.915-1.277a.75.75 0 0 1-.335-.63zM15.75 15.75a.75.75 0 0 1 .53-.22h1.94l1.5-1.5a.75.75 0 0 1 1.28.53v1.94l1.5 1.5a.75.75 0 0 1-.53 1.28h-1.94l-1.5 1.5a.75.75 0 0 1-1.28-.53v-1.94l-1.5-1.5a.75.75 0 0 1 .53-1.28z"/>
+            </svg>
+          </span>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight">Dashboard</h1>
+            <p class="text-sm text-slate-400">Your quick launch hub</p>
+          </div>
+        </a>
+
+        <div class="flex items-center gap-2">
+          <a href="#" class="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">Help</a>
+          <button class="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400" onclick="toggleTheme()" aria-label="Toggle theme">Theme</button>
+        </div>
       </div>
     </div>
-  </div>
-  <hr style="margin:18px 0">
-  <section>
-    <h3 style="margin:0 0 8px 0">Inventory Grid (Aggregated)</h3>
-    <div class="card" style="padding:10px">
-      <div id="inventoryGrid" style="max-height:420px;overflow:auto">No inventory aggregated yet.</div>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-6 pb-16">
+    <!-- Hero / intro -->
+    <section class="mb-8">
+      <div class="rounded-2xl border border-white/10 bg-slate-900/60 backdrop-blur supports-[backdrop-filter]:bg-slate-900/40 p-6 md:p-8 shadow-lg shadow-cyan-500/5">
+        <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">Welcome back</h2>
+            <p class="mt-1 text-slate-400">Choose a section below to jump in. You can rename the pages and replace the links later.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <a href="#links" class="rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/20 hover:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">Quick Links</a>
+            <a href="#" class="rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-2 text-sm font-semibold text-fuchsia-300 hover:text-white hover:bg-fuchsia-500/20 hover:border-fuchsia-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400">Customize</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Grid of Link Cards -->
+    <section id="links" aria-label="Primary sections">
+      <ul class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- Card 1 -->
+        <li>
+          <a href="analytics.html" class="group relative block overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-cyan-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+            <div class="absolute -right-10 -top-10 size-32 rounded-full bg-cyan-500/20 blur-2xl transition group-hover:scale-110"></div>
+            <div class="flex items-start justify-between">
+              <h3 class="text-lg font-bold tracking-wide">Analytics</h3>
+              <!-- Chart icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6 text-cyan-300">
+                <path d="M3 3.75A.75.75 0 0 1 3.75 3h16.5a.75.75 0 0 1 .75.75V6a.75.75 0 0 1-1.5 0V4.5H4.5V19.5H6a.75.75 0 0 1 0 1.5H3.75a.75.75 0 0 1-.75-.75V3.75z"/>
+                <path d="M20.47 8.47a.75.75 0 0 1 1.06 1.06l-6 6a.75.75 0 0 1-1.06 0L11 11.12l-3.47 3.47a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 1.06 0l3.47 3.47 5.47-5.47z"/>
+              </svg>
+            </div>
+            <p class="mt-2 text-sm text-slate-400">KPIs, charts, and trends.</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-cyan-300">Open <span aria-hidden>→</span></div>
+          </a>
+        </li>
+        <!-- Card 2 -->
+        <li>
+          <a href="inventory.html" class="group relative block overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
+            <div class="absolute -right-10 -top-10 size-32 rounded-full bg-emerald-500/20 blur-2xl transition group-hover:scale-110"></div>
+            <div class="flex items-start justify-between">
+              <h3 class="text-lg font-bold tracking-wide">Inventory</h3>
+              <!-- Boxes icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6 text-emerald-300">
+                <path d="M11.25 3.042a1.5 1.5 0 0 1 1.5 0l6.75 3.75a1.5 1.5 0 0 1 0 2.616l-6.75 3.75a1.5 1.5 0 0 1-1.5 0L4.5 9.408a1.5 1.5 0 0 1 0-2.616l6.75-3.75z"/>
+                <path d="M3.857 13.5a1.5 1.5 0 0 1 .75-1.299l6.393-3.552a1.5 1.5 0 0 1 1.5 0l6.393 3.552a1.5 1.5 0 0 1 .75 1.299v4.643a1.5 1.5 0 0 1-.75 1.299l-6.393 3.552a1.5 1.5 0 0 1-1.5 0l-6.393-3.552a1.5 1.5 0 0 1-.75-1.299V13.5z"/>
+              </svg>
+            </div>
+            <p class="mt-2 text-sm text-slate-400">Stock levels and audits.</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-300">Open <span aria-hidden>→</span></div>
+          </a>
+        </li>
+        <!-- Card 3 -->
+        <li>
+          <a href="orders.html" class="group relative block overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-fuchsia-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400">
+            <div class="absolute -right-10 -top-10 size-32 rounded-full bg-fuchsia-500/20 blur-2xl transition group-hover:scale-110"></div>
+            <div class="flex items-start justify-between">
+              <h3 class="text-lg font-bold tracking-wide">Orders</h3>
+              <!-- Cart icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6 text-fuchsia-300">
+                <path d="M2.25 3a.75.75 0 0 1 .75-.75h2.443a1.5 1.5 0 0 1 1.415 1.003l.387 1.16h12.255a.75.75 0 0 1 .721.95l-1.8 6.75a1.5 1.5 0 0 1-1.45 1.1H8.54l-.324 1.21h9.534a.75.75 0 0 1 0 1.5H7.5a1.5 1.5 0 0 1-1.45-1.9l1.95-7.275-1.1-3.294H3A.75.75 0 0 1 2.25 3zM8.25 20.25a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm9 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+              </svg>
+            </div>
+            <p class="mt-2 text-sm text-slate-400">Purchase orders and history.</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-fuchsia-300">Open <span aria-hidden>→</span></div>
+          </a>
+        </li>
+        <!-- Card 4 -->
+        <li>
+          <a href="staff.html" class="group relative block overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-amber-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+            <div class="absolute -right-10 -top-10 size-32 rounded-full bg-amber-500/20 blur-2xl transition group-hover:scale-110"></div>
+            <div class="flex items-start justify-between">
+              <h3 class="text-lg font-bold tracking-wide">Staff</h3>
+              <!-- Users icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6 text-amber-300">
+                <path d="M7.5 6a4.5 4.5 0 1 1 6.364 4.138 6.75 6.75 0 0 1 5.636 6.645.75.75 0 0 1-1.5 0 5.25 5.25 0 0 0-10.5 0 .75.75 0 0 1-1.5 0 6.75 6.75 0 0 1 5.633-6.644A4.5 4.5 0 0 1 7.5 6z"/>
+              </svg>
+            </div>
+            <p class="mt-2 text-sm text-slate-400">Scheduling and profiles.</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-amber-300">Open <span aria-hidden>→</span></div>
+          </a>
+        </li>
+        <!-- Card 5 -->
+        <li class="sm:col-span-2 lg:col-span-1">
+          <a href="settings.html" class="group relative block overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60 p-5 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+            <div class="absolute -right-10 -top-10 size-32 rounded-full bg-indigo-500/20 blur-2xl transition group-hover:scale-110"></div>
+            <div class="flex items-start justify-between">
+              <h3 class="text-lg font-bold tracking-wide">Settings</h3>
+              <!-- Cog icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6 text-indigo-300">
+                <path fill-rule="evenodd" d="M11.98 2.25a.75.75 0 0 1 .733.581l.4 1.786c.34.07.673.17.996.298l1.637-1.07a.75.75 0 0 1 .97.12l1.5 1.5a.75.75 0 0 1 .12.97l-1.07 1.637c.128.323.228.657.298.996l1.786.4a.75.75 0 0 1 .581.733v2.121a.75.75 0 0 1-.581.733l-1.786.4a7 7 0 0 1-.298.996l1.07 1.637a.75.75 0 0 1-.12.97l-1.5 1.5a.75.75 0 0 1-.97.12l-1.637-1.07a7 7 0 0 1-.996.298l-.4 1.786a.75.75 0 0 1-.733.581H9.86a.75.75 0 0 1-.733-.581l-.4-1.786a7 7 0 0 1-.996-.298l-1.637 1.07a.75.75 0 0 1-.97-.12l-1.5-1.5a.75.75 0 0 1-.12-.97l1.07-1.637a7 7 0 0 1-.298-.996l-1.786-.4a.75.75 0 0 1-.581-.733V9.86a.75.75 0 0 1 .581-.733l1.786-.4c.07-.34.17-.673.298-.996l-1.07-1.637a.75.75 0 0 1 .12-.97l1.5-1.5a.75.75 0 0 1 .97-.12l1.637 1.07c.323-.128.657-.228.996-.298l.4-1.786a.75.75 0 0 1 .733-.581h2.121zM12 9.75a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5z" clip-rule="evenodd"/>
+              </svg>
+            </div>
+            <p class="mt-2 text-sm text-slate-400">Preferences and appearance.</p>
+            <div class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-indigo-300">Open <span aria-hidden>→</span></div>
+          </a>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Optional quick links bar -->
+    <section class="mt-10">
+      <div class="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="text-sm text-slate-400">Pins:</span>
+          <a href="analytics.html" class="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/20 hover:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">Analytics</a>
+          <a href="inventory.html" class="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:text-white hover:bg-emerald-500/20 hover:border-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">Inventory</a>
+          <a href="orders.html" class="rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-300 hover:text-white hover:bg-fuchsia-500/20 hover:border-fuchsia-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400">Orders</a>
+          <a href="staff.html" class="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/20 hover:border-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">Staff</a>
+          <a href="settings.html" class="rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:text-white hover:bg-indigo-500/20 hover:border-indigo-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">Settings</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="mx-auto max-w-7xl px-6 pb-10">
+    <div class="flex items-center justify-between text-xs text-slate-500">
+      <p>© <span id="year"></span> Your Company</p>
+      <a class="hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 rounded" href="#">Privacy</a>
     </div>
-    <footer>
-      Tip: open this page locally (no server required). Files are processed in your browser and not uploaded anywhere.
-    </footer>
-  </section>
-</main>
+  </footer>
 
-<!-- Known stores modal -->
-<div id="storesModalOverlay">
-  <div id="storesModal">
-    <h2>Edit Known Stores</h2>
-    <div>
-      <input id="newStoreModal" placeholder="e.g. 018" style="width:80px;margin-right:8px" />
-      <button id="addStoreModal" class="small ghost">Add</button>
-    </div>
-    <div id="storesModalList" class="modal-list"></div>
-    <div class="modal-actions">
-      <button id="closeStoresModal" class="small ghost">Close</button>
-      <button id="exportStoresModal" class="small">Export Known Stores</button>
-    </div>
-    <div style="margin-top:8px;font-size:12px;color:#666">
-      Changes are saved for this browser/device. Export to update your HTML file's default store list.
-    </div>
-  </div>
-</div>
+  <script>
+    // Set current year
+    document.getElementById('year').textContent = new Date().getFullYear();
 
-<script>
-function isMobileDevice() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-}
-if (isMobileDevice()) {
-  document.body.classList.add('mobile');
-} else {
-  document.body.classList.add('desktop');
-}
-
-const defaultStores = ["001","003","004","005","007","008","010","011","012","014","015","017","018","019","201","202","203","204","206","207","208","209","211","214","215","216","217"];
-const LS_KEY = "joeValadezInventoryStores";
-function loadKnownStores() {
-  try {
-    const saved = localStorage.getItem(LS_KEY);
-    if (saved) return new Set(JSON.parse(saved));
-  } catch(e){}
-  return new Set(defaultStores);
-}
-function saveKnownStores(set) {
-  localStorage.setItem(LS_KEY, JSON.stringify(Array.from(set)));
-}
-let knownStores = loadKnownStores();
-
-let importedFiles = [];
-let aggregated = null;
-let inventoryGridState = null;
-let templateRows = null;
-
-// UI refs
-const filesEl = document.getElementById('files');
-const clearBtn = document.getElementById('clearBtn');
-const importPreview = document.getElementById('importPreview');
-const aggregateBtn = document.getElementById('aggregateBtn');
-const inventoryGrid = document.getElementById('inventoryGrid');
-const statusEl = document.getElementById('status');
-const downloadJsonBtn = document.getElementById('downloadJsonBtn');
-const loadJsonBtn = document.getElementById('loadJsonBtn');
-const loadJsonFile = document.getElementById('loadJsonFile');
-const pdfFoilBtn = document.getElementById('pdfFoilBtn');
-const pdfInvBtn = document.getElementById('pdfInvBtn');
-const missingStoresCard = document.getElementById('missingStoresCard');
-
-// Template UI
-const templateFileEl = document.getElementById('templateFile');
-const importTemplateBtn = document.getElementById('importTemplateBtn');
-const templateStatus = document.getElementById('templateStatus');
-
-// Known stores modal refs
-const storesBtn = document.getElementById('storesBtn');
-const storesModalOverlay = document.getElementById('storesModalOverlay');
-const storesModal = document.getElementById('storesModal');
-const storesModalList = document.getElementById('storesModalList');
-const addStoreModal = document.getElementById('addStoreModal');
-const newStoreModal = document.getElementById('newStoreModal');
-const closeStoresModal = document.getElementById('closeStoresModal');
-const exportStoresModal = document.getElementById('exportStoresModal');
-
-function renderStoresModal(){
-  storesModalList.innerHTML = '';
-  Array.from(knownStores).sort().forEach(s=>{
-    const div = document.createElement('div');
-    div.style.display='flex';
-    div.style.justifyContent='space-between';
-    div.style.alignItems='center';
-    div.style.padding='4px 8px';
-    div.style.borderBottom='1px solid #f1f5fb';
-    div.innerHTML = `<div style="font-family:monospace">${s}</div><button class="ghost small" data-store="${s}">Remove</button>`;
-    storesModalList.appendChild(div);
-  });
-  storesModalList.querySelectorAll('button').forEach(b=>{
-    b.onclick = ()=>{
-      knownStores.delete(b.dataset.store);
-      saveKnownStores(knownStores);
-      renderStoresModal();
-      if(aggregated) renderInventoryGrid(aggregated);
-    };
-  });
-}
-storesBtn.onclick = ()=>{
-  renderStoresModal();
-  storesModalOverlay.style.display='flex';
-  newStoreModal.value='';
-};
-closeStoresModal.onclick = ()=> storesModalOverlay.style.display='none';
-storesModalOverlay.onclick = (e)=>{ if(e.target===storesModalOverlay) storesModalOverlay.style.display='none'; };
-addStoreModal.onclick = ()=>{
-  const v = (newStoreModal.value||'').trim();
-  if(!v) return;
-  const num = v.replace(/\D/g,'');
-  const store = num.length===0 ? v : num.padStart(3,'0');
-  knownStores.add(store);
-  saveKnownStores(knownStores);
-  newStoreModal.value='';
-  renderStoresModal();
-  if(aggregated) renderInventoryGrid(aggregated);
-};
-exportStoresModal.onclick = ()=>{
-  const arr = Array.from(knownStores).sort();
-  const blob = new Blob([JSON.stringify(arr,null,2)],{type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'known_stores.json';
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-clearBtn.onclick = ()=>{
-  importedFiles = [];
-  importPreview.innerHTML = '';
-  status('Cleared imported files.', 'ok');
-  inventoryGrid.textContent = 'No inventory aggregated yet.';
-  missingStoresCard.style.display = 'none';
-};
-
-importTemplateBtn.onclick = async ()=>{
-  const file = templateFileEl.files[0];
-  if(!file){ templateStatus.textContent = 'No template file selected.'; templateStatus.style.color='#c0392b'; return; }
-  try{
-    const buffer = await file.arrayBuffer();
-    const wb = XLSX.read(buffer, {type:'array'});
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    templateRows = [];
-    for(let r=8;r<=44;r++){
-      const pack = cellValue(sheet, 'A'+r);
-      const size = cellValue(sheet, 'B'+r);
-      const desc = cellValue(sheet, 'C'+r);
-      if(pack===null && size===null && desc===null) continue;
-      templateRows.push({
-        pack: pack===null ? '' : String(pack),
-        size: size===null ? '' : String(size),
-        description: desc===null ? '' : String(desc)
-      });
-    }
-    if(templateRows.length === 0) throw new Error('No template rows found in selected file.');
-    templateStatus.textContent = `Imported ${templateRows.length} template rows.`;
-    templateStatus.style.color='#0b8f3b';
-  }catch(e){
-    templateStatus.textContent = 'Failed to import template: ' + e.toString();
-    templateStatus.style.color='#c0392b';
-    templateRows = null;
-  }
-};
-
-function status(txt, cls){
-  statusEl.textContent = txt;
-  statusEl.className = cls ? cls : '';
-}
-
-filesEl.onchange = async ()=>{
-  const list = filesEl.files;
-  if(!list || list.length===0){ status('No files selected to import.', 'error'); return; }
-  status('Importing files...');
-  importedFiles = [];
-  // Track lastModified time for each file
-  for(const f of list){
-    try{
-      const buffer = await f.arrayBuffer();
-      const wb = XLSX.read(buffer, {type:'array'});
-      const entry = {name: f.name, workbook: wb, parsed: null, warnings: [], lastModified: f.lastModified || 0};
-      entry.parsed = parseWorkbook(wb);
-      importedFiles.push(entry);
-    } catch(err){
-      importedFiles.push({name:f.name, error:err.toString(), lastModified: f.lastModified || 0});
-      console.error('Import error', err);
-    }
-  }
-  renderImportedPreview();
-  status('Import completed. You can aggregate JSON now.');
-};
-
-function renderImportedPreview(){
-  importPreview.innerHTML = '';
-  importedFiles.forEach((it, idx)=>{
-    const cont = document.createElement('div');
-    cont.style.padding='4px 0';
-    cont.style.borderBottom='1px solid #f1f5fb';
-    if(it.error){
-      cont.innerHTML = `<span class="filename">${escapeHtml(it.name)}</span> <span class="error">Failed</span>`;
-    } else {
-      const p = it.parsed;
-      let dateStr = '';
-      if (it.lastModified) {
-        const d = new Date(it.lastModified);
-        dateStr = ` <span style="color:#999;font-size:11px;">(${d.toLocaleDateString()} ${d.toLocaleTimeString()})</span>`;
-      }
-      cont.innerHTML = `<span class="filename">${escapeHtml(it.name)}</span> <span class="store">${p.storeNumber||'—'}</span>${dateStr}`;
-    }
-    importPreview.appendChild(cont);
-  });
-}
-
-function cellValue(ws, addr){
-  const v = ws[addr];
-  if(!v) return null;
-  return (v.v===undefined || v.v===null) ? null : v.v;
-}
-
-function parseWorkbook(wb){
-  const sheetNames = wb.SheetNames;
-  function findSheetByKeywords(keys){
-    keys = keys.map(k=>k.toLowerCase());
-    for(const n of sheetNames){
-      const l = n.toLowerCase();
-      if(keys.some(k=>l.includes(k))) return wb.Sheets[n];
-    }
-    return null;
-  }
-  let templateWs = findSheetByKeywords(['template','pack','description']) || wb.Sheets[sheetNames[0]];
-  let invWs = findSheetByKeywords(['inventory','inv','store']) || wb.Sheets[sheetNames[1]] || templateWs;
-  const parsed = { storeNumber: null, templateRows: 0, quantityRows: 0, foilItems: [], template: [] , quantities: [] , warnings: [] };
-  try{
-    for(let r=8;r<=44;r++){
-      const pack = cellValue(templateWs, 'A'+r);
-      const size = cellValue(templateWs, 'B'+r);
-      const desc = cellValue(templateWs, 'C'+r);
-      if(pack===null && size===null && desc===null) continue;
-      parsed.template.push({
-        pack: pack===null ? '' : String(pack),
-        size: size===null ? '' : String(size),
-        description: desc===null ? '' : String(desc)
-      });
-    }
-    parsed.templateRows = parsed.template.length;
-  } catch(e){
-    parsed.warnings.push('Template read failed: '+e.toString());
-  }
-  try{
-    let s = cellValue(invWs, 'G3');
-    if((s===null || s===undefined) && templateWs!==invWs){
-      s = cellValue(templateWs, 'G3');
-    }
-    if(s!==null && s!==undefined) {
-      s = String(s).trim();
-      const num = s.replace(/\D/g,'');
-      parsed.storeNumber = num.length>0 ? num.padStart(3,'0') : s;
-    } else {
-      parsed.warnings.push('Store number (G3) not found');
-    }
-    for(let r=8;r<=44;r++){
-      const q = cellValue(invWs, 'D'+r);
-      parsed.quantities.push(q===null || q===undefined ? null : (isNaN(q)? String(q) : Number(q)));
-    }
-    parsed.quantityRows = parsed.quantities.length;
-    const foil = [];
-    for(let r=8;r<=11;r++){
-      const val = cellValue(invWs, 'G'+r);
-      foil.push(val===null||val===undefined ? null : String(val));
-    }
-    parsed.foilItems = foil;
-  } catch(e){
-    parsed.warnings.push('Inventory read failed: '+e.toString());
-  }
-  return parsed;
-}
-
-// Helper to generate formatted date for filenames
-function getFormattedDateForFilename() {
-  return dayjs().format('YYYY-MM-DD');
-}
-
-// Aggregate imported files into final JSON using templateRows
-aggregateBtn.onclick = ()=>{
-  if(importedFiles.length===0){ status('No imported files to aggregate.', 'error'); return; }
-  if(!templateRows || templateRows.length===0){ status('No template imported. Please import template file.', 'error'); return; }
-  let masterTemplate = templateRows;
-  // --- Filter for unique stores, prefer latest file by lastModified ---
-  const storeMap = {};
-  importedFiles.forEach(it=>{
-    if(it.error || !it.parsed || !it.parsed.storeNumber) return;
-    const storeNum = it.parsed.storeNumber;
-    if (!storeMap[storeNum] || (it.lastModified > storeMap[storeNum].lastModified)) {
-      storeMap[storeNum] = it;
-    }
-  });
-  const data = {};
-  Object.keys(storeMap).forEach(storeNum=>{
-    const it = storeMap[storeNum];
-    const p = it.parsed;
-    if(!knownStores.has(storeNum)){
-      p.warnings.push(`Store ${storeNum} not found in known store list. You may add it to include in master reports.`);
-    }
-    const qty = p.quantities.slice(0, masterTemplate.length);
-    while(qty.length < masterTemplate.length) qty.push(null);
-    data[storeNum] = {
-      storeNumber: storeNum,
-      foil: p.foilItems.slice(0,4),
-      quantities: qty,
-      sourceFile: it.name,
-      lastModified: it.lastModified
-    };
-  });
-  aggregated = {
-    stores: Object.keys(data).sort(),
-    knownStores: Array.from(knownStores).sort(),
-    templateItems: masterTemplate,
-    data,
-    rowRange: {start:8,end:44},
-    foilRange: {start:8,end:11}
-  };
-  renderInventoryGrid(aggregated);
-  showMissingStores(aggregated);
-  status('Aggregated inventory ready.', 'ok');
-  downloadJsonBtn.disabled = false;
-};
-
-function showMissingStores(agg){
-  if(!agg || !agg.knownStores || !agg.stores) {
-    missingStoresCard.style.display = 'none';
-    return;
-  }
-  const missing = agg.knownStores.filter(store=>!agg.stores.includes(store));
-  if(missing.length === 0){
-    missingStoresCard.style.display = 'none';
-    return;
-  }
-  missingStoresCard.style.display = '';
-  missingStoresCard.innerHTML = `<b>Stores missing in imported inventory:</b><ul>${missing.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ul>`;
-}
-
-function guessStoreFromFilename(name){
-  const m = name.match(/(\d{3})/);
-  if(m) return m[1];
-  return null;
-}
-
-downloadJsonBtn.onclick = ()=>{
-  if(!aggregated){ status('No aggregated JSON to download.', 'error'); return; }
-  const blob = new Blob([JSON.stringify(aggregated,null,2)],{type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'aggregated_inventory.json';
-  a.click();
-  URL.revokeObjectURL(url);
-  status('JSON downloaded.', 'ok');
-};
-
-loadJsonBtn.onclick = ()=> loadJsonFile.click();
-loadJsonFile.onchange = async (e)=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  const text = await f.text();
-  try{
-    aggregated = JSON.parse(text);
-    renderInventoryGrid(aggregated);
-    showMissingStores(aggregated);
-    status('Loaded JSON from file.', 'ok');
-  } catch(err){
-    status('Failed to parse JSON: '+err.toString(), 'error');
-    inventoryGrid.textContent = 'No inventory aggregated yet.';
-    missingStoresCard.style.display = 'none';
-  }
-  e.target.value = '';
-};
-
-async function generateInventoryPDF(agg){
-  if(!agg){ status('No aggregated data available for PDF.', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'landscape'});
-
-  const marginLeft = 18;
-  const titleY = 45;
-  const dateY = 45;
-  doc.setFontSize(16);
-  doc.setTextColor(0,0,0);
-  doc.setFont(undefined,'bold');
-  doc.text('Joe Valadez Inventory', marginLeft, titleY);
-
-  // Date on top right, custom format
-  const dateStr = dayjs().format('dddd, MMM D, YYYY');
-  const pageWidth = doc.internal.pageSize.getWidth();
-  doc.setFontSize(10);
-  doc.setFont(undefined,'normal');
-  doc.text(dateStr, pageWidth - marginLeft, dateY, { align: 'right' });
-
-  let y = titleY + 20;
-
-  const stores = agg.stores.length ? agg.stores : agg.knownStores;
-  const header = ['Description, Size', ...stores, 'Total'];
-  const rows = [];
-  const template = agg.templateItems || [];
-  const descColWidth = 120;
-
-  template.forEach((t, idx)=>{
-    let desc = t.description || '';
-    const size = t.size || '';
-    // TRIM ONLY THE DESCRIPTION TO 20 CHARACTERS, THEN ADD SIZE
-    let trimmedDesc = desc.length > 20 ? desc.substring(0, 20) : desc;
-    let combined = size ? `${trimmedDesc}, ${size}` : trimmedDesc;
-    const row = [combined];
-    let total = 0;
-    stores.forEach(s=>{
-      const entry = agg.data && agg.data[s] ? agg.data[s] : null;
-      const q = entry && entry.quantities && entry.quantities[idx]!==undefined ? entry.quantities[idx] : 0;
-      const val = q===null||q===undefined ? 0 : Number(q);
-      row.push(val);
-      if(!isNaN(val)) total += val;
-    });
-    row.push(total);
-    rows.push(row);
-  });
-
-  doc.autoTable({
-    head: [header],
-    body: rows,
-    startY: y,
-    styles: {
-      fontSize:8,
-      cellPadding:3,
-      halign:'center',
-      valign:'middle',
-      textColor:[0,0,0],
-      cellWidth: 'auto',
-      minCellHeight: 16,
-      overflow: 'linebreak',
-    },
-    headStyles: { fillColor: [230,235,255], textColor:[0,0,0], halign:'center' },
-    columnStyles: {
-      0: { halign:'left', cellWidth: descColWidth },
-      [header.length-1]: { fontStyle:'bold' }
-    },
-    margin: { left: marginLeft, right: marginLeft },
-    tableWidth: 'auto'
-  });
-
-  // Append date to file name
-  const filename = `Joe Valadez Inventory ${getFormattedDateForFilename()}.pdf`;
-  doc.save(filename);
-  status(`Inventory PDF generated (${filename}).`, 'ok');
-}
-
-pdfInvBtn.onclick = ()=> {
-  if(!aggregated){ status('No aggregated JSON — aggregate or load JSON file first.', 'error'); return; }
-  generateInventoryPDF(aggregated);
-};
-
-// Foil PDF with date in filename
-async function generateFoilPDF(agg){
-  if(!agg) { status('No aggregated data available for PDF.', 'error'); return; }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({unit:'pt', format:'letter', orientation:'landscape'});
-  const margin = 40;
-  let y = 40;
-  doc.setFontSize(14);
-  doc.text('Foil Pan Order', margin, y);
-  y += 18;
-  const header = ['Store','Small Foil Pans','Large Rectangular Pans','Large Oval Pans','Ultra Foil'];
-  const rows = [];
-  const stores = agg.stores.length ? agg.stores : agg.knownStores;
-  stores.forEach(s=>{
-    const entry = agg.data && agg.data[s] ? agg.data[s] : null;
-    const row = [s,
-      entry && entry.foil && entry.foil[0]!==undefined ? (entry.foil[0]===null?'':String(entry.foil[0])) : '',
-      entry && entry.foil && entry.foil[1]!==undefined ? (entry.foil[1]===null?'':String(entry.foil[1])) : '',
-      entry && entry.foil && entry.foil[2]!==undefined ? (entry.foil[2]===null?'':String(entry.foil[2])) : '',
-      entry && entry.foil && entry.foil[3]!==undefined ? (entry.foil[3]===null?'':String(entry.foil[3])) : ''
-    ];
-    rows.push(row);
-  });
-  doc.autoTable({
-    head: [header],
-    body: rows,
-    startY: y + 6,
-    styles: { fontSize:10, cellPadding:4 },
-    margin: { left: margin, right: margin }
-  });
-  // Append date to file name
-  const filename = `foil_pan_order_${getFormattedDateForFilename()}.pdf`;
-  doc.save(filename);
-  status(`Foil pan PDF generated (${filename}).`, 'ok');
-}
-
-pdfFoilBtn.onclick = ()=> {
-  if(!aggregated){ status('No aggregated JSON — aggregate or load JSON file first.', 'error'); return; }
-  generateFoilPDF(aggregated);
-};
-
-function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-function renderInventoryGrid(agg){
-  if(!agg || !agg.templateItems || !agg.stores || !agg.data){
-    inventoryGrid.textContent = 'No inventory aggregated yet.';
-    return;
-  }
-  const stores = agg.stores.length ? agg.stores : Array.from(knownStores).sort();
-  const template = agg.templateItems;
-  let header = ['Description / Size'].concat(stores).concat(['Total']);
-  let colWidths = header.map(h=>h.length);
-  let rows = [];
-  template.forEach((t, idx)=>{
-    let desc = t.description || '';
-    if(t.size) desc += ', ' + t.size;
-    if(desc.length < 1) desc = '[No description]';
-    let row = [desc];
-    let total = 0;
-    stores.forEach(s=>{
-      const entry = agg.data && agg.data[s] ? agg.data[s] : null;
-      let val = entry && entry.quantities && entry.quantities[idx]!==undefined ? entry.quantities[idx] : '';
-      if(val===null || val===undefined || val==='') val = '';
-      row.push(val);
-      total += (val!=='' && !isNaN(val)) ? Number(val) : 0;
-    });
-    row.push(total);
-    rows.push(row);
-    row.forEach((cell, i)=>{
-      colWidths[i] = Math.max(colWidths[i], String(cell).length);
-    });
-  });
-
-  inventoryGridState = {agg, stores, template, rows, colWidths};
-
-  let html = '<table style="width:100%;border-collapse:collapse;font-family:inherit;font-size:13px;background:#0f1724;color:#e6f0ff;">';
-  html += '<thead><tr>';
-  header.forEach((h,i)=>{
-    html += `<th style="background:#23304e;color:#fff;border:1px solid #23304e;padding:6px;">${escapeHtml(h)}</th>`;
-  });
-  html += '</tr></thead>';
-  html += '<tbody>';
-  rows.forEach((row,ridx)=>{
-    html += '<tr>';
-    row.forEach((cell,cidx)=>{
-      if(cidx>0 && cidx<row.length-1){
-        html += `<td style="border:1px solid #23304e;padding:6px;text-align:right;cursor:pointer;" data-row="${ridx}" data-col="${cidx}" class="editable-cell">${escapeHtml(cell)}</td>`;
+    // Basic theme toggle:
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.classList.contains('dark') ? 'dark' : 'light';
+      if (current === 'dark') {
+        html.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
       } else {
-        html += `<td style="border:1px solid #23304e;padding:6px;text-align:${cidx==0?'left':'right'};">${escapeHtml(cell)}</td>`;
+        html.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
       }
-    });
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  inventoryGrid.innerHTML = html;
+    }
 
-  inventoryGrid.querySelectorAll('.editable-cell').forEach(td=>{
-    td.onclick = function(e){
-      if(td.querySelector('input')) return;
-      const origVal = td.textContent;
-      td.innerHTML = `<input type="number" inputmode="numeric" pattern="[0-9]*" value="${escapeHtml(origVal)}" style="width:60px;" class="cell-editing" />`;
-      const inp = td.querySelector('input');
-      inp.focus();
-      inp.select();
-      inp.onkeydown = function(ev){
-        if(ev.key==='Enter'){
-          inp.blur();
-        }
-      };
-      inp.onblur = function(){
-        let val = inp.value.trim();
-        if(val==='' || isNaN(val)) val = '';
-        td.innerHTML = escapeHtml(val);
-        td.classList.remove('cell-editing');
-        const row = Number(td.dataset.row);
-        const col = Number(td.dataset.col);
-        const storeIdx = col-1;
-        const store = inventoryGridState.stores[storeIdx];
-        if(aggregated && aggregated.data && aggregated.data[store]) {
-          aggregated.data[store].quantities[row] = (val===''?null:Number(val));
-          renderInventoryGrid(aggregated);
-          showMissingStores(aggregated);
-        }
-      };
-    };
-  });
-}
-window.addEventListener('DOMContentLoaded', function() {
-  if(document.body.classList.contains('mobile')) {
-    setTimeout(function(){
-      alert("Tip: For easier editing, rotate your phone to landscape. You can scroll the inventory grid sideways.");
-    }, 1500);
-  }
-});
-</script>
+    // Respect saved preference (defaults to dark)
+    (function initTheme(){
+      const saved = localStorage.getItem('theme');
+      if (!saved || saved === 'dark') document.documentElement.classList.add('dark');
+    })();
+  </script>
 </body>
 </html>
