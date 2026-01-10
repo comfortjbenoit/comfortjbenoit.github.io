@@ -1,3 +1,5 @@
+
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -687,6 +689,9 @@ template.forEach((t, idx) => {
 });
 
 
+  // Store table configuration for form field placement
+  let formFieldData = [];
+
   doc.autoTable({
     head: [header],
     body: rows,
@@ -707,7 +712,34 @@ template.forEach((t, idx) => {
       [header.length-1]: { fontStyle:'bold' }
     },
     margin: { left: marginLeft, right: marginLeft },
-    tableWidth: 'auto'
+    tableWidth: 'auto',
+    didDrawCell: function(data) {
+      // Store cell positions for editable fields (store columns only, not description or total)
+      if (data.section === 'body' && data.column.index > 0 && data.column.index < header.length - 1) {
+        formFieldData.push({
+          x: data.cell.x,
+          y: data.cell.y,
+          width: data.cell.width,
+          height: data.cell.height,
+          value: data.cell.text[0] || '',
+          row: data.row.index,
+          col: data.column.index
+        });
+      }
+    }
+  });
+
+  // Add editable form fields over the table cells
+  formFieldData.forEach((field, idx) => {
+    const textField = new doc.AcroFormTextField();
+    textField.fieldName = `inventory_r${field.row}_c${field.col}`;
+    textField.Rect = [field.x + 1, field.y + 1, field.width - 2, field.height - 2];
+    textField.value = field.value;
+    textField.fontSize = 8;
+    textField.textAlign = 'center';
+    textField.maxFontSize = 8;
+    textField.backgroundColor = [1, 1, 1]; // white background
+    doc.addField(textField);
   });
 
   // Append date to file name
@@ -766,6 +798,9 @@ async function generateFoilPDF(agg){
   const tableWidth = pageWidth - margin*2;
   const colWidth = (tableWidth - 60) / 4;
 
+  // Store form field data
+  let foilFormFieldData = [];
+
   doc.autoTable({
     head: [header],
     body: rows,
@@ -797,7 +832,34 @@ async function generateFoilPDF(agg){
         data.cell.styles.fontStyle = 'bold';
         data.cell.styles.fillColor = [245,245,245];
       }
+    },
+    didDrawCell: function(data) {
+      // Store cell positions for editable fields (foil columns only, not store name or totals row)
+      if (data.section === 'body' && data.column.index > 0 && data.row.index < rows.length - 1) {
+        foilFormFieldData.push({
+          x: data.cell.x,
+          y: data.cell.y,
+          width: data.cell.width,
+          height: data.cell.height,
+          value: data.cell.text[0] || '',
+          row: data.row.index,
+          col: data.column.index
+        });
+      }
     }
+  });
+
+  // Add editable form fields over the foil pan cells
+  foilFormFieldData.forEach((field, idx) => {
+    const textField = new doc.AcroFormTextField();
+    textField.fieldName = `foil_r${field.row}_c${field.col}`;
+    textField.Rect = [field.x + 1, field.y + 1, field.width - 2, field.height - 2];
+    textField.value = field.value;
+    textField.fontSize = 10;
+    textField.textAlign = 'center';
+    textField.maxFontSize = 10;
+    textField.backgroundColor = [1, 1, 1]; // white background
+    doc.addField(textField);
   });
 
   // filename with date
