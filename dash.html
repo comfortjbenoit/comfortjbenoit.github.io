@@ -39,6 +39,12 @@ input[type="text"] {
 
 .desc {
     font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.date {
+    font-size: 13px;
+    color: #444;
     margin-bottom: 6px;
 }
 
@@ -144,6 +150,10 @@ function render(data) {
 
         card.innerHTML = `
             <div class="desc">${r["Desc"] || ""}</div>
+
+            <div class="date">
+                📅 Invoice Date: ${r["Invoice Date"] || ""}
+            </div>
 
             <div class="row">
                 <span>QTY: ${r["Qty"] || ""}</span>
