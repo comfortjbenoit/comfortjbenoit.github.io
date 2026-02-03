@@ -9,7 +9,7 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
     padding: 12px;
-    background: #f8f8f8;
+    background: #f5f5f5;
 }
 
 h2 {
@@ -25,30 +25,37 @@ input[type="text"] {
 }
 
 #count {
-    margin: 8px 0;
     font-size: 14px;
+    margin-bottom: 8px;
 }
 
-table {
-    width: 100%;
-    border-collapse: collapse;
+.card {
     background: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
 }
 
-th, td {
-    padding: 8px;
-    border-bottom: 1px solid #ddd;
+.desc {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
     font-size: 14px;
+    gap: 12px;
 }
 
-th {
-    background: #efefef;
-    position: sticky;
-    top: 0;
+.row span {
+    white-space: nowrap;
 }
 
-tr:active {
-    background: #f0f0f0;
+.muted {
+    color: #555;
+    font-size: 13px;
 }
 </style>
 </head>
@@ -61,14 +68,9 @@ tr:active {
 <input type="text" id="searchBox" placeholder="Search Item Code, UPC, or Description">
 
 <div id="count"></div>
-
-<table>
-    <thead id="thead"></thead>
-    <tbody id="tbody"></tbody>
-</table>
+<div id="results"></div>
 
 <script>
-let headers = [];
 let rows = [];
 
 document.getElementById("csvFile").addEventListener("change", e => {
@@ -82,7 +84,7 @@ document.getElementById("csvFile").addEventListener("change", e => {
 
 document.getElementById("searchBox").addEventListener("input", e => {
     const q = e.target.value.toLowerCase().trim();
-    if (q.length === 0) {
+    if (!q) {
         render([]);
         document.getElementById("count").textContent = "";
         return;
@@ -94,14 +96,14 @@ document.getElementById("searchBox").addEventListener("input", e => {
         (r["Desc"] || "").toLowerCase().includes(q)
     );
 
-    render(matches.slice(0, 200)); // cap for mobile performance
+    render(matches.slice(0, 200));
     document.getElementById("count").textContent =
         `${matches.length} match(es)`;
 });
 
 function parseCSV(text) {
     const lines = text.split(/\r?\n/).filter(l => l.trim());
-    headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
+    const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
 
     rows = lines.slice(1).map(line => {
         const values = parseLine(line);
@@ -109,8 +111,6 @@ function parseCSV(text) {
         headers.forEach((h, i) => obj[h] = values[i] || "");
         return obj;
     });
-
-    renderHeader();
 }
 
 function parseLine(line) {
@@ -121,13 +121,11 @@ function parseLine(line) {
     for (let i = 0; i < line.length; i++) {
         let c = line[i];
         if (c === '"' && line[i + 1] === '"') {
-            cur += '"';
-            i++;
+            cur += '"'; i++;
         } else if (c === '"') {
             q = !q;
         } else if (c === "," && !q) {
-            res.push(cur);
-            cur = "";
+            res.push(cur); cur = "";
         } else {
             cur += c;
         }
@@ -136,28 +134,31 @@ function parseLine(line) {
     return res;
 }
 
-function renderHeader() {
-    const tr = document.createElement("tr");
-    headers.forEach(h => {
-        const th = document.createElement("th");
-        th.textContent = h;
-        tr.appendChild(th);
-    });
-    document.getElementById("thead").appendChild(tr);
-}
-
 function render(data) {
-    const tbody = document.getElementById("tbody");
-    tbody.innerHTML = "";
+    const out = document.getElementById("results");
+    out.innerHTML = "";
 
-    data.forEach(row => {
-        const tr = document.createElement("tr");
-        headers.forEach(h => {
-            const td = document.createElement("td");
-            td.textContent = row[h];
-            tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
+    data.forEach(r => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML = `
+            <div class="desc">${r["Desc"] || ""}</div>
+
+            <div class="row">
+                <span>QTY: ${r["Qty"] || ""}</span>
+                <span>PK: ${r["PK"] || ""}</span>
+                <span>SZ: ${r["SZ"] || ""}</span>
+                <span>UNIT: ${r["Unit Cost"] || ""}</span>
+                <span>@20%: ${r["@20%"] || ""}</span>
+            </div>
+
+            <div class="row muted">
+                <span>UPC: ${r["UPC"] || ""}</span>
+                <span>ITEM: ${r["Item Code"] || ""}</span>
+            </div>
+        `;
+        out.appendChild(card);
     });
 }
 </script>
