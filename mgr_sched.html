@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Schedule Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #c8102e 0%, #3b3b3b 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            border: 1px dotted #c8102e;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #c8102e 0%, #8f0c23 100%);
+            color: #fff;
+            padding: 8px 12px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 0.75em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 10px;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border: 1px dotted #c8102e;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #a31a2c;
+            background: #f3f4f8;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            display: none;
+        }
+
+        .file-input-button {
+            background: linear-gradient(135deg, #c8102e 0%, #8f0c23 100%);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            display: inline-block;
+        }
+
+        .file-input-button:hover {
+            transform: scale(1.05);
+        }
+
+        .file-name {
+            margin-top: 6px;
+            font-size: 0.8em;
+            color: #c8102e;
+            font-weight: bold;
+        }
+
+        .generate-button {
+            background: linear-gradient(135deg, #c8102e 0%, #8f0c23 100%);
+            color: #fff;
+            padding: 6px 16px;
+            border: none;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .generate-button:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+
+        .generate-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .preview-section {
+            margin-top: 6px;
+            display: none;
+        }
+
+        .preview-title {
+            font-size: 1em;
+            color: #333;
+            margin-bottom: 4px;
+            text-align: center;
+        }
+
+        .store-section {
+            margin-bottom: 20px;
+            padding: 6px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px dotted #c8102e;
+        }
+
+        .store-title {
+            font-size: 0.9em;
+            color: #c8102e;
+            margin-bottom: 4px;
+            text-align: center;
+            font-weight: bold;
+            padding-bottom: 4px;
+            border-bottom: 1px dotted #c8102e;
+        }
+
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 0.85em;
+        }
+
+        .schedule-table th {
+            background: #3b3b3b;
+            color: #fff;
+            padding: 4px 2px;
+            text-align: center;
+            font-weight: bold;
+            border: 1px solid #ddd;
+            font-size: 1em;
+        }
+
+        .schedule-table td {
+            padding: 4px 2px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+            text-align: center;
+            font-size: 1em;
+        }
+
+        .schedule-table th:first-child,
+        .schedule-table th:nth-child(2) {
+            text-align: left;
+        }
+
+        .day-header {
+            display: block;
+            font-size: 1em;
+        }
+
+        .date-header {
+            display: block;
+            font-size: 0.85em;
+            font-weight: normal;
+            opacity: 0.9;
+            margin-top: 2px;
+        }
+
+        .store-name {
+            font-weight: bold;
+            color: #c8102e;
+            min-width: 120px;
+            text-align: left !important;
+        }
+
+        .employee-name {
+            font-weight: bold;
+            color: #333;
+            min-width: 70px;
+            text-align: left !important;
+            font-size: 1em;
+        }
+
+        .employee-title {
+            color: #666;
+            font-style: italic;
+            font-size: 0.75em;
+            margin-top: 3px;
+            text-align: left !important;
+        }
+
+        .shift-info {
+            font-size: 0.9em;
+            line-height: 1.1;
+            margin-bottom: 2px;
+            text-align: center;
+        }
+
+        .shift-info:last-child {
+            margin-bottom: 0;
+        }
+
+        .shift-time {
+            font-weight: bold;
+            color: #c8102e;
+            white-space: nowrap;
+            display: block;
+        }
+
+        .shift-position {
+            color: #666;
+            font-style: italic;
+            display: block;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        .status-success {
+            background: #dfeee6;
+            color: #0b3d1f;
+            border: 1px solid #a6d3b2;
+        }
+
+        .status-error {
+            background: #f7d8dc;
+            color: #7a0d1c;
+            border: 1px solid #e6a8b0;
+        }
+
+        .status-info {
+            background: #e5edf7;
+            color: #0c2f60;
+            border: 1px solid #c8d9f0;
+        }
+
+        .missing-stores-section {
+            background: #fff3cd;
+            border: 1.5px solid #ffc107;
+            border-radius: 6px;
+            padding: 10px;
+            margin: 16px 0;
+            display: none;
+        }
+
+        .missing-stores-section.show {
+            display: block;
+        }
+
+        .missing-stores-title {
+            font-size: 0.95em;
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 7px;
+            display: flex;
+            align-items: center;
+        }
+
+        .missing-stores-title::before {
+            content: '⚠️ ';
+            margin-right: 8px;
+        }
+
+        .missing-stores-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+            gap: 7px;
+            color: #856404;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+
+        .missing-store-item {
+            background: white;
+            border: 1.5px solid #ffc107;
+            border-radius: 4px;
+            padding: 5px 0;
+            text-align: center;
+            font-size: 0.95em;
+        }
+
+        /* PDF preview modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal {
+            background: #fff;
+            border-radius: 10px;
+            max-width: 1100px;
+            width: 100%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: #3b3b3b;
+            color: #fff;
+        }
+
+        .modal-title {
+            font-size: 1.05em;
+            font-weight: 600;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .modal-actions button {
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-secondary {
+            background: #e8e8e8;
+            color: #333;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #c8102e 0%, #8f0c23 100%);
+            color: #fff;
+        }
+
+        .modal-body {
+            padding: 0;
+            flex: 1;
+            background: #f5f5f5;
+        }
+
+        .pdf-frame {
+            width: 100%;
+            height: 80vh;
+            border: none;
+            display: block;
+        }
+
+        .print-section {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .print-title {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .print-iframe {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .print-button {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 12px 40px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            display: none;
+            margin: 20px auto;
+        }
+
+        .print-button:hover {
+            transform: scale(1.05);
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .upload-section, .generate-button, .print-button, .header {
+                display: none;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Manager Schedule Generator</h1>
+            <p>Generate Manager Schedules</p>
+        </div>
+
+        <div class="content">
+            <div class="upload-section">
+                <div class="file-input-wrapper">
+                    <label class="file-input-button">
+                        📁 Choose CSV File
+                        <input type="file" id="csvFile" accept=".csv" />
+                    </label>
+                </div>
+                <div class="file-name" id="fileName">No file selected</div>
+            </div>
+
+            <button class="generate-button" id="generateBtn" disabled>Generate Schedule</button>
+
+            <div id="missingStoresContainer" class="missing-stores-section">
+                <div class="missing-stores-title">Missing Stores from Import</div>
+                <div class="missing-stores-list" id="missingStoresList"></div>
+            </div>
+
+            <div id="statusMessage"></div>
+
+            <div id="previewContainer"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="pdfModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">PDF Preview</div>
+                <div class="modal-actions">
+                    <button class="btn-secondary" onclick="closePdfPreview()">Close</button>
+                    <button class="btn-primary" onclick="downloadPdfPreview()">Download</button>
+                    <button class="btn-primary" onclick="printPdfPreview()">Print</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <iframe id="pdfPreviewFrame" class="pdf-frame"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let csvText = '';
+        let scheduleData = null;
+        let pdfObjectUrl = null;
+        let currentPdfBlob = null;
+        let currentWeekEndingDate = null;
+
+        // All expected stores
+        const EXPECTED_STORES = ['001', '003', '005', '007', '008', '010', '011', '012', '014', '015', '017', '018', '019', '201', '202', '203', '204', '206', '207', '208', '209', '211', '214', '215', '216', '217'];
+
+        document.getElementById('csvFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('fileName').textContent = file.name;
+                parseCSV(file);
+            }
+        });
+
+        document.getElementById('generateBtn').addEventListener('click', generatePDF);
+        document.getElementById('generateDailyBtn').addEventListener('click', handleDailyPdfPreview);
+
+        function parseCSV(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                csvText = text;
+                processCSVData(text);
+            };
+            reader.readAsText(file);
+        }
+
+        function processCSVData(csvText) {
+            try {
+                const lines = csvText.split('\n');
+                const headers = parseCSVLine(lines[0]);
+                const data = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim()) {
+                        const values = parseCSVLine(lines[i]);
+                        if (values.length === headers.length) {
+                            const row = {};
+                            headers.forEach((header, index) => {
+                                row[header] = values[index];
+                            });
+                            data.push(row);
+                        }
+                    }
+                }
+
+                const result = organizeScheduleData(data);
+                scheduleData = result.schedule;
+                window.weekDates = result.weekDates;
+                window.employeeNames = result.employeeNames;
+                window.employeePositions = result.employeePositions;
+                window.storeData = result.storeData;
+                displayPreview();
+                
+                // Check for missing stores - extract store numbers from Location field
+                const storeNumbers = new Set();
+                data.forEach(row => {
+                    const location = row['Location'] || '';
+                    const match = location.match(/#(\d+)/);
+                    if (match) {
+                        storeNumbers.add(match[1]);
+                    }
+                });
+                checkAndDisplayMissingStores(Array.from(storeNumbers));
+                
+                document.getElementById('generateBtn').disabled = false;
+                document.getElementById('generateDailyBtn').disabled = false;
+                
+                const totalEmployees = Object.keys(scheduleData).reduce((sum, store) => sum + Object.keys(scheduleData[store]).length, 0);
+                const storeCount = Object.keys(scheduleData).length;
+                showStatus('CSV file loaded successfully! ' + totalEmployees + ' employees across ' + storeCount + ' store(s) found.', 'success');
+            } catch (error) {
+                showStatus('Error parsing CSV: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+
+        function formatEmployeeName(name) {
+            // Convert "LAST, FIRST M" to "First Last"
+            if (!name) return '';
+            
+            const parts = name.split(',');
+            if (parts.length !== 2) return name;
+            
+            let lastName = parts[0].trim();
+            const firstPart = parts[1].trim();
+            
+            // Get first name only (before any space or middle initial)
+            const firstName = firstPart.split(' ')[0];
+            
+            // Capitalize first name properly
+            const capitalizedFirst = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+            
+            // If there are multiple last names, use only the first one
+            const lastNameParts = lastName.split(' ');
+            const firstLastName = lastNameParts[0];
+            
+            // Capitalize the first last name
+            const capitalizedLast = firstLastName.charAt(0).toUpperCase() + firstLastName.slice(1).toLowerCase();
+            
+            return capitalizedFirst + ' ' + capitalizedLast;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"' && line[i + 1] === '"') { current += '"'; i++; }
+                else if (char === '"') { inQuotes = !inQuotes; }
+                else if (char === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+                else { current += char; }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
+        function checkAndDisplayMissingStores(importedStores) {
+            // Convert to set for comparison (already formatted as plain numbers)
+            const importedSet = new Set(importedStores.map(s => String(s).trim()));
+            const missingStores = EXPECTED_STORES.filter(store => !importedSet.has(store));
+            
+            const container = document.getElementById('missingStoresContainer');
+            const list = document.getElementById('missingStoresList');
+            
+            if (missingStores.length > 0) {
+                list.innerHTML = missingStores.map(store => 
+                    '<div class="missing-store-item">#' + store + '</div>'
+                ).join('');
+                container.classList.add('show');
+            } else {
+                container.classList.remove('show');
+                list.innerHTML = '';
+            }
+        }
+
+        function applyUbuntuMono(doc) {
+            if (typeof ubuntuMonoBase64 !== 'undefined' && ubuntuMonoBase64 && ubuntuMonoBase64.length > 0) {
+                try {
+                    doc.addFileToVFS('UbuntuMono.ttf', ubuntuMonoBase64);
+                    doc.addFont('UbuntuMono.ttf', 'UbuntuMono', 'normal');
+                    doc.setFont('UbuntuMono', 'normal');
+                } catch (e) {
+                    console.warn('Could not load UbuntuMono font, using default.', e);
+                    doc.setFont('helvetica', 'normal');
+                }
+            } else {
+                doc.setFont('helvetica', 'normal');
+            }
+        }
+
+        function parseTimeToDate(timeStr) {
+            if (!timeStr) return null;
+            const d = new Date();
+            const parts = timeStr.split(' ');
+            if (parts.length < 2) return null;
+            const [time, modifier] = parts;
+            let [hours, minutes] = time.split(':').map(Number);
+            if (modifier === 'PM' && hours < 12) hours += 12;
+            if (modifier === 'AM' && hours === 12) hours = 0;
+            d.setHours(hours, minutes || 0, 0, 0);
+            return d;
+        }
+
+        function formatTime(timeStr) {
+            const d = parseTimeToDate(timeStr);
+            if (!d) return '';
+            let hours = d.getHours();
+            const minutes = d.getMinutes();
+            const ampm = hours >= 12 ? 'p' : 'a';
+            hours = hours % 12;
+            if (hours === 0) hours = 12;
+            return hours + ':' + (minutes < 10 ? '0' : '') + minutes + ampm;
+        }
+
+        function mapPosition(pos) {
+            if (["Booth Manager", "Booth Specialist", "Booth Operator"].includes(pos)) return "Service Center";
+            if (["Lead Stocker", "AM Stocker", "PM Stocker"].includes(pos)) return "Stockers";
+            if (["Scan Coordinator", "Receiver"].includes(pos)) return "Store Support";
+            return pos;
+        }
+
+        const positionOrder = [
+            'CSR', 'Self-Checkout Cashier', 'Cashier', 'Sacker', 'Service Center', 'Floor Clerk',
+            'Cart Attendant', 'Facer', 'Stockers', 'Store Support'
+        ];
+
+        function positionRank(pos) {
+            const idx = positionOrder.indexOf(pos);
+            return idx === -1 ? 999 : idx;
+        }
+
+        function getManagerPositionRank(position) {
+            if (!position) return 999;
+            const posLower = position.toLowerCase().trim();
+            // Check for store director FIRST (before general director check to avoid matching "director" in other titles)
+            if (posLower.includes('store director')) return 0;
+            // Check for assistant director (various formats)
+            if (posLower.includes('assistant director') || posLower.includes('asst director') || posLower.includes('asst. director')) return 1;
+            // Check for assistant manager (various formats)
+            if (posLower.includes('assistant manager') || posLower.includes('asst manager') || posLower.includes('asst. manager')) return 2;
+            return 999;
+        }
+
+        function formatDate(dateStr) {
+            const d = new Date(dateStr);
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            return d.toLocaleDateString(undefined, options);
+        }
+
+        function formatName(name) {
+            if (!name) return '';
+            let first = '';
+            let last = '';
+            if (name.includes(',')) {
+                const parts = name.split(',');
+                last = parts[0].trim();
+                const firstMiddleParts = parts[1].trim().split(/\s+/);
+                first = firstMiddleParts[0] || '';
+            } else {
+                const parts = name.trim().split(/\s+/);
+                if (parts.length > 0) first = parts[0];
+                if (parts.length > 1) last = parts[parts.length - 1];
+            }
+            first = first ? first.charAt(0).toUpperCase() + first.slice(1).toLowerCase() : '';
+            // For last name initial, use only the first word if there are multiple last names
+            const lastNameWords = last.split(/\s+/);
+            const firstLastName = lastNameWords[0] || '';
+            last = firstLastName ? firstLastName.charAt(0).toUpperCase() : '';
+            return first + (last ? ' ' + last + '.' : '');
+        }
+
+        function truncateTextToWidth(doc, text, maxWidth) {
+            let truncated = text;
+            while (doc.getTextWidth(truncated) > maxWidth && truncated.length > 0) {
+                truncated = truncated.slice(0, -1);
+            }
+            return truncated;
+        }
+
+        function organizeScheduleData(data) {
+            const scheduleByStore = {};
+            const employeeNamesByStore = {};
+            const employeePositionsByStore = {};
+            const weekDates = {};
+            const storeData = {};
+            const dayOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+            data.forEach(row => {
+                const originalName = row['Employee'];
+                const employeeName = formatEmployeeName(originalName);
+                const date = row['Date'];
+                const position = row['Position'];
+                const startTime = row['Start Time'];
+                const endTime = row['End Time'];
+                const location = row['Location'] || 'Unknown Store';
+
+                if (!employeeName || !date) return;
+
+                // Parse date and get day of week
+                const dateParts = date.split('/');
+                const dateObj = new Date(dateParts[2], dateParts[0] - 1, dateParts[1]);
+                const dayOfWeek = dayOrder[dateObj.getDay()];
+
+                // Initialize store if needed
+                if (!scheduleByStore[location]) {
+                    scheduleByStore[location] = {};
+                    employeeNamesByStore[location] = {};
+                    employeePositionsByStore[location] = {};
+                    storeData[location] = location;
+                }
+
+                // Initialize employee within store if needed
+                if (!scheduleByStore[location][employeeName]) {
+                    scheduleByStore[location][employeeName] = {
+                        Sunday: [],
+                        Monday: [],
+                        Tuesday: [],
+                        Wednesday: [],
+                        Thursday: [],
+                        Friday: [],
+                        Saturday: []
+                    };
+                    employeeNamesByStore[location][employeeName] = originalName;
+                    employeePositionsByStore[location][employeeName] = position;
+                }
+
+                scheduleByStore[location][employeeName][dayOfWeek].push({
+                    time: formatTime(startTime) + ' - ' + formatTime(endTime),
+                    position: position,
+                    date: date
+                });
+
+                // Track the date for this day of week
+                if (!weekDates[dayOfWeek]) {
+                    weekDates[dayOfWeek] = date;
+                }
+            });
+
+            // Sort shifts within each day by start time
+            Object.keys(scheduleByStore).forEach(store => {
+                Object.keys(scheduleByStore[store]).forEach(employee => {
+                    Object.keys(scheduleByStore[store][employee]).forEach(day => {
+                        scheduleByStore[store][employee][day].sort((a, b) => {
+                            return a.time.localeCompare(b.time);
+                        });
+                    });
+                });
+            });
+
+            return { 
+                schedule: scheduleByStore, 
+                weekDates, 
+                employeeNames: employeeNamesByStore,
+                employeePositions: employeePositionsByStore,
+                storeData 
+            };
+        }
+
+        function displayPreview() {
+            const previewContainer = document.getElementById('previewContainer');
+            let html = '';
+
+            // Sort stores alphabetically
+            const sortedStores = Object.keys(scheduleData).sort();
+
+            sortedStores.forEach(store => {
+                // Sort employees by position rank within each store - ensure strict order: director, asst director, asst manager
+                const sortedEmployees = Object.keys(scheduleData[store]).sort((a, b) => {
+                    const posA = window.employeePositions[store][a] || '';
+                    const posB = window.employeePositions[store][b] || '';
+                    const rankA = getManagerPositionRank(posA);
+                    const rankB = getManagerPositionRank(posB);
+                    // Always sort by position rank first (0=director, 1=asst director, 2=asst manager)
+                    if (rankA !== rankB) return rankA - rankB;
+                    // If same rank, sort by last name from original name
+                    const originalA = window.employeeNames[store][a] || a;
+                    const originalB = window.employeeNames[store][b] || b;
+                    return originalA.localeCompare(originalB);
+                });
+
+                html += '<div class="store-section">';
+                html += '<div class="store-title">' + store + '</div>';
+                html += '<table class="schedule-table">';
+                html += '<thead><tr>';
+                html += '<th>Employee</th>';
+                
+                ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].forEach(day => {
+                    const dateStr = window.weekDates && window.weekDates[day] ? window.weekDates[day] : '';
+                    html += '<th><span class="day-header">' + day + '</span>';
+                    if (dateStr) {
+                        html += '<span class="date-header">' + dateStr + '</span>';
+                    }
+                    html += '</th>';
+                });
+                
+                html += '</tr></thead><tbody>';
+
+                sortedEmployees.forEach(employee => {
+                    const position = window.employeePositions[store][employee] || '';
+                    html += '<tr>';
+                    html += '<td class="employee-name">' + employee + '</td>';
+                    
+                    ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].forEach(day => {
+                        html += '<td>';
+                        const shifts = scheduleData[store][employee][day];
+                        if (shifts.length > 0) {
+                            shifts.forEach(shift => {
+                                html += '<div class="shift-info">';
+                                html += '<div class="shift-time">' + shift.time + '</div>';
+                                html += '</div>';
+                            });
+                        }
+                        html += '</td>';
+                    });
+                    
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                html += '</div>';
+            });
+
+            previewContainer.innerHTML = html;
+        }
+
+        function getWeekEndingDate() {
+            // Get Saturday's date (week ending date)
+            if (window.weekDates && window.weekDates['Saturday']) {
+                return window.weekDates['Saturday'];
+            }
+            return new Date().toLocaleDateString();
+        }
+
+        function generateDailyPDFBlob() {
+            if (!csvText) { showStatus('Please load a CSV file first.', 'error'); return null; }
+
+            const lines = csvText.trim().split('\n').filter(line => line.trim().length > 0);
+            if (lines.length === 0) { showStatus('CSV is empty.', 'error'); return null; }
+
+            const headers = parseCSVLine(lines[0]);
+            const rows = lines.slice(1).map(line => {
+                const values = parseCSVLine(line);
+                const row = {};
+                headers.forEach((h, i) => row[h.trim()] = values[i] ? values[i].trim() : '');
+                row['Position'] = mapPosition(row['Position']);
+                row['Employee'] = formatName(row['Employee']);
+                return row;
+            }).filter(row => {
+                // Exclude Meat and Produce departments
+                const dept = (row['Department'] || '').toLowerCase();
+                return dept !== 'meat' && dept !== 'produce';
+            });
+
+            const grouped = {};
+            rows.forEach(r => {
+                const date = r['Date'];
+                if (!date) return;
+                if (!grouped[date]) grouped[date] = [];
+                grouped[date].push(r);
+            });
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+            applyUbuntuMono(doc);
+
+            const headerColor = [255, 255, 255];
+            let firstPage = true;
+
+            Object.keys(grouped).sort((a, b) => new Date(a) - new Date(b)).forEach(date => {
+                if (!firstPage) doc.addPage();
+                firstPage = false;
+
+                const dayRows = grouped[date];
+                if (!dayRows || dayRows.length === 0) return;
+                const storeName = dayRows[0]['Location'] || '';
+
+                const categoryMap = {};
+                dayRows.forEach(r => {
+                    if (!categoryMap[r['Position']]) categoryMap[r['Position']] = [];
+                    categoryMap[r['Position']].push(r);
+                });
+
+                const sortedCategories = Object.keys(categoryMap).sort((a, b) => positionRank(a) - positionRank(b));
+                const fontSize = Math.min(9, Math.max(6, Math.floor(9 * (dayRows.length + sortedCategories.length) / 35)));
+
+                const pageWidth = doc.internal.pageSize.width - 28;
+                const employeeCol = 130;
+                const timeCol = 55;
+                const notesCol = pageWidth - employeeCol - 6 * timeCol;
+
+                const tableData = [];
+                sortedCategories.forEach(cat => {
+                    const employees = categoryMap[cat];
+                    employees.sort((a, b) => {
+                        const timeA = parseTimeToDate(a['Start Time']);
+                        const timeB = parseTimeToDate(b['Start Time']);
+                        if (timeA && timeB && timeA.getTime() !== timeB.getTime()) return timeA - timeB;
+                        return (a['Employee'] || '').localeCompare(b['Employee'] || '');
+                    });
+
+                    tableData.push([
+                        { content: cat, styles: { fontStyle: 'bold underline', halign: 'center', fillColor: headerColor, textColor: 0 } },
+                        { content: 'Start', styles: { fontStyle: 'bold underline', halign: 'center', fillColor: headerColor, textColor: 0 } },
+                        { content: 'Break Out', styles: { fontStyle: 'bold underline', halign: 'center', fillColor: headerColor, textColor: 0 } },
+                        { content: 'Break In', styles: { fontStyle: 'bold underline', halign: 'center', fillColor: headerColor, textColor: 0 } },
+                        { content: 'Lunch Out', styles: { fontStyle: 'bold underline', halign: 'center', fillColor: headerColor, textColor: 0 } },
+                        { content: 'Lunch In', styles: { fontStyle: 'bold underline', halign: 'center', fillColor: headerColor, textColor: 0 } },
+                        { content: 'End', styles: { fontStyle: 'bold underline', halign: 'center', fillColor: headerColor, textColor: 0 } },
+                        { content: 'Notes', styles: { fontStyle: 'bold underline', fillColor: headerColor, textColor: 0 } }
+                    ]);
+
+                    employees.forEach((r, i) => {
+                        const bgColor = i % 2 === 0 ? [255, 255, 255] : [245, 245, 245];
+                        const employeeName = truncateTextToWidth(doc, r['Employee'] || '', employeeCol);
+
+                        tableData.push([
+                            { content: employeeName, styles: { fillColor: bgColor, cellWidth: employeeCol } },
+                            { content: formatTime(r['Start Time']), styles: { fillColor: bgColor, cellWidth: timeCol, halign: 'right' } },
+                            { content: formatTime(r['Break Start']), styles: { fillColor: bgColor, cellWidth: timeCol, halign: 'right' } },
+                            { content: formatTime(r['Break End']), styles: { fillColor: bgColor, cellWidth: timeCol, halign: 'right' } },
+                            { content: formatTime(r['Lunch Start']), styles: { fillColor: bgColor, cellWidth: timeCol, halign: 'right' } },
+                            { content: formatTime(r['Lunch End']), styles: { fillColor: bgColor, cellWidth: timeCol, halign: 'right' } },
+                            { content: formatTime(r['End Time']), styles: { fillColor: bgColor, cellWidth: timeCol, halign: 'right' } },
+                            { content: '', styles: { fillColor: bgColor, cellWidth: notesCol } }
+                        ]);
+                    });
+                });
+
+                const headerY = 50;
+                doc.setFontSize(14);
+                doc.text(storeName, 14, headerY);
+                doc.text(formatDate(date), doc.internal.pageSize.width - 14, headerY, { align: 'right' });
+
+                doc.autoTable({
+                    startY: 72,
+                    margin: { left: 14, right: 14 },
+                    head: [],
+                    body: tableData,
+                    theme: 'grid',
+                    styles: { fontSize, cellPadding: 1, lineHeight: 1.0, font: doc.getFont().fontName }
+                });
+            });
+
+            return doc.output('blob');
+        }
+
+        function handleDailyPdfPreview() {
+            const blob = generateDailyPDFBlob();
+            if (blob) {
+                if (pdfObjectUrl) {
+                    URL.revokeObjectURL(pdfObjectUrl);
+                }
+                pdfObjectUrl = URL.createObjectURL(blob);
+                openPdfPreview(pdfObjectUrl);
+                showStatus('Daily schedules PDF ready to view.', 'success');
+            }
+        }
+
+        function generatePDF() {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                let currentY = 15;
+                let isFirstStore = true;
+
+                // Sort stores alphabetically
+                const sortedStores = Object.keys(scheduleData).sort();
+
+                // Get missing stores
+                const storeNumbers = new Set();
+                Object.keys(scheduleData).forEach(store => {
+                    // Extract store number from store name (e.g., "Food Town #017" -> "017")
+                    const match = store.match(/#(\d+)/);
+                    if (match) {
+                        storeNumbers.add(match[1]);
+                    }
+                });
+                const missingStores = EXPECTED_STORES.filter(store => !storeNumbers.has(store));
+
+                // Title and missing stores section on first page only
+                doc.setFontSize(16);
+                doc.text('Manager Schedule', 105, currentY, { align: 'center' });
+                currentY += 5;
+                doc.setFontSize(9);
+                doc.text('Week Ending: ' + getWeekEndingDate(), 105, currentY, { align: 'center' });
+                currentY += 5;
+
+                // Add missing stores section if there are any
+                if (missingStores.length > 0) {
+                    doc.setFontSize(8);
+                    doc.setFont(undefined, 'bold');
+                    doc.text('Stores Not in Report:', 105, currentY, { align: 'center' });
+                    doc.setFont(undefined, 'normal');
+                    currentY += 3;
+                    doc.setFontSize(7);
+                    const missingStoresText = missingStores.map(s => '#' + s).join(', ');
+                    doc.text(missingStoresText, 105, currentY, { align: 'center', maxWidth: 177 });
+                    currentY += 6;
+                }
+
+                sortedStores.forEach((store, storeIndex) => {
+
+                    // Sort by position rank within each store - ensure strict order: director, asst director, asst manager
+                    const sortedEmployees = Object.keys(scheduleData[store]).sort((a, b) => {
+                        const posA = window.employeePositions[store][a] || '';
+                        const posB = window.employeePositions[store][b] || '';
+                        const rankA = getManagerPositionRank(posA);
+                        const rankB = getManagerPositionRank(posB);
+                        // Always sort by position rank first (0=director, 1=asst director, 2=asst manager)
+                        if (rankA !== rankB) return rankA - rankB;
+                        // If same rank, sort by last name from original name
+                        const originalA = window.employeeNames[store][a] || a;
+                        const originalB = window.employeeNames[store][b] || b;
+                        return originalA.localeCompare(originalB);
+                    });
+                    const tableData = [];
+
+                    sortedEmployees.forEach(employee => {
+                        const position = window.employeePositions[store][employee] || '';
+                        // Format name as: First Last. for PDF
+                        const nameParts = employee.split(' ');
+                        let shortName = employee;
+                        if (nameParts.length >= 2) {
+                            shortName = nameParts[0] + ' ' + nameParts[nameParts.length - 1].charAt(0) + '.';
+                        }
+                        const row = [shortName];
+                        ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].forEach(day => {
+                            const shifts = scheduleData[store][employee][day];
+                            let cellContent = '';
+                            shifts.forEach(shift => {
+                                if (cellContent) cellContent += '\n\n';
+                                cellContent += shift.time;
+                            });
+                            row.push(cellContent || '');
+                        });
+                        tableData.push(row);
+                    });
+
+                    // Create header with day names and dates
+                    const headerRow = ['Employee'];
+                    ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].forEach(day => {
+                        const dateStr = window.weekDates && window.weekDates[day] ? window.weekDates[day] : '';
+                        headerRow.push(day + (dateStr ? '\n' + dateStr : ''));
+                    });
+
+                    // Check if we need a new page for this store (but not on first store)
+                    if (storeIndex > 0) {
+                        // Estimate space needed for this table (roughly 20mm + 10mm per employee)
+                        const estimatedHeight = 20 + (sortedEmployees.length * 10);
+                        
+                        if (currentY + estimatedHeight > 280) {
+                            doc.addPage();
+                            currentY = 15;
+                        }
+                    }
+
+                    // Store name
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(store, 105, currentY, { align: 'center' });
+                    doc.setFont(undefined, 'normal');
+                    currentY += 5;
+
+                    doc.autoTable({
+                        head: [headerRow],
+                        body: tableData,
+                        startY: currentY,
+                        styles: {
+                            fontSize: 6.5,
+                            cellPadding: 1.5,
+                            overflow: 'linebreak',
+                            cellWidth: 'wrap'
+                        },
+                        headStyles: {
+                            fillColor: [74, 74, 74],
+                            fontStyle: 'bold',
+                            halign: 'center',
+                            fontSize: 7
+                        },
+                        columnStyles: {
+                            0: { cellWidth: 32, fontStyle: 'bold', halign: 'left', fontSize: 7.5 },
+                            1: { cellWidth: 22, halign: 'center', fontSize: 7.5 },
+                            2: { cellWidth: 22, halign: 'center', fontSize: 7.5 },
+                            3: { cellWidth: 22, halign: 'center', fontSize: 7.5 },
+                            4: { cellWidth: 22, halign: 'center', fontSize: 7.5 },
+                            5: { cellWidth: 22, halign: 'center', fontSize: 7.5 },
+                            6: { cellWidth: 22, halign: 'center', fontSize: 7.5 },
+                            7: { cellWidth: 22, halign: 'center', fontSize: 7.5 }
+                        },
+                        margin: { left: 10, right: 10 },
+                        theme: 'grid'
+                    });
+
+                    currentY = doc.lastAutoTable.finalY + 10;
+                });
+
+                // Get PDF as blob and show preview modal
+                const pdfBlob = doc.output('blob');
+                currentPdfBlob = pdfBlob;
+                currentWeekEndingDate = getWeekEndingDate();
+                if (pdfObjectUrl) {
+                    URL.revokeObjectURL(pdfObjectUrl);
+                }
+                pdfObjectUrl = URL.createObjectURL(pdfBlob);
+                openPdfPreview(pdfObjectUrl);
+                showStatus('PDF ready to print.', 'success');
+            } catch (error) {
+                showStatus('Error generating PDF: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+
+        function openPdfPreview(url) {
+            const modal = document.getElementById('pdfModal');
+            const frame = document.getElementById('pdfPreviewFrame');
+            if (!modal || !frame) return;
+            frame.src = url;
+            modal.style.display = 'flex';
+        }
+
+        function closePdfPreview() {
+            const modal = document.getElementById('pdfModal');
+            const frame = document.getElementById('pdfPreviewFrame');
+            if (frame) frame.src = '';
+            if (pdfObjectUrl) {
+                URL.revokeObjectURL(pdfObjectUrl);
+                pdfObjectUrl = null;
+            }
+            if (modal) modal.style.display = 'none';
+        }
+
+        function printPdfPreview() {
+            const frame = document.getElementById('pdfPreviewFrame');
+            if (frame && frame.contentWindow) {
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+            } else {
+                showStatus('Preview not ready to print.', 'error');
+            }
+        }
+
+        function downloadPdfPreview() {
+            if (!currentPdfBlob || !currentWeekEndingDate) {
+                showStatus('PDF not ready to download.', 'error');
+                return;
+            }
+
+            // Format the week ending date as mmddyy
+            const dateParts = currentWeekEndingDate.split('/');
+            const mmddyy = dateParts[0] + dateParts[1] + dateParts[2].slice(-2);
+            
+            // Create filename: "Manager Schedule WE MMDDYY.pdf"
+            const filename = 'Manager Schedule WE ' + mmddyy + '.pdf';
+            
+            // Create a blob URL and trigger download
+            const downloadUrl = URL.createObjectURL(currentPdfBlob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(downloadUrl);
+            
+            showStatus('PDF downloaded: ' + filename, 'success');
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = 'status-message status-' + type;
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
