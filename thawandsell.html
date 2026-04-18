@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bakery Expiration Calculator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f5f5f0;
+    color: #1a1a1a;
+    min-height: 100vh;
+    padding: 0 0 2rem;
+  }
+
+  header {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 1.25rem 1.25rem 1rem;
+  }
+
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  header p {
+    font-size: 13px;
+    color: #aaa;
+    margin-top: 2px;
+  }
+
+  .container {
+    padding: 1.25rem;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e5e5e0;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 8px;
+  }
+
+  select {
+    width: 100%;
+    font-size: 16px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #ddd;
+    background: #f9f9f7;
+    color: #1a1a1a;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+
+  select:focus {
+    outline: none;
+    border-color: #1a1a1a;
+  }
+
+  .date-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 1rem;
+  }
+
+  .date-row input[type="date"] {
+    flex: 1;
+    font-size: 16px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #ddd;
+    background: #f9f9f7;
+    color: #1a1a1a;
+  }
+
+  .date-row input[type="date"]:focus {
+    outline: none;
+    border-color: #1a1a1a;
+  }
+
+  .today-btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #1a1a1a;
+    background: #1a1a1a;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .today-btn:active {
+    opacity: 0.8;
+  }
+
+  .result {
+    display: none;
+    margin-top: 1rem;
+  }
+
+  .result.show {
+    display: block;
+  }
+
+  .exp-date-display {
+    background: #1a1a1a;
+    color: #fff;
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .exp-date-display .label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 6px;
+  }
+
+  .exp-date-display .big-date {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .exp-date-display .day-name {
+    font-size: 14px;
+    color: #bbb;
+    margin-top: 2px;
+  }
+
+  .meta-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .meta-card {
+    background: #f5f5f0;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .meta-card .meta-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .meta-card .meta-val {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .meta-card .meta-unit {
+    font-size: 12px;
+    color: #666;
+    margin-top: 1px;
+  }
+
+  .warning {
+    background: #fff8e6;
+    border: 1.5px solid #f5c842;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: #7a5c00;
+    margin-top: 10px;
+    display: none;
+  }
+
+  .warning.show { display: block; }
+
+  .search-wrap {
+    position: relative;
+    margin-bottom: 0;
+  }
+
+  .search-input {
+    width: 100%;
+    font-size: 16px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #ddd;
+    background: #f9f9f7;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: #1a1a1a;
+  }
+
+  .search-input::placeholder { color: #aaa; }
+
+  .item-count {
+    font-size: 12px;
+    color: #888;
+    text-align: right;
+    margin-top: -4px;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bakery Expiration Calculator</h1>
+  <p>Food Town 18 — Fondren Rd</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <label>Search item</label>
+    <input class="search-input" type="text" id="searchInput" placeholder="Type to filter..." oninput="filterItems()">
+    <div class="item-count" id="itemCount"></div>
+
+    <label>Select item</label>
+    <select id="itemSelect" onchange="calculate()">
+      <option value="">— choose an item —</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <label>Received / stocked date</label>
+    <div class="date-row">
+      <input type="date" id="stockDate" onchange="calculate()">
+      <button class="today-btn" onclick="setToday()">Today</button>
+    </div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="exp-date-display">
+      <div class="label">Expiration date</div>
+      <div class="big-date" id="expDateBig">—</div>
+      <div class="day-name" id="expDayName"></div>
+    </div>
+    <div class="meta-row">
+      <div class="meta-card">
+        <div class="meta-label">Shelf life</div>
+        <div class="meta-val" id="shelfDays">—</div>
+        <div class="meta-unit">days</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-label">Days remaining</div>
+        <div class="meta-val" id="daysLeft">—</div>
+        <div class="meta-unit">from today</div>
+      </div>
+    </div>
+    <div class="warning" id="warning"></div>
+  </div>
+
+</div>
+
+<script>
+const items = [
+  {"description":"2 Bite Cupcakes","shelf_life_days":21},
+  {"description":"2 Bite Mini Donuts","shelf_life_days":7},
+  {"description":"2-Bite Brownies","shelf_life_days":10},
+  {"description":"Ashcraft Bolillos","shelf_life_days":5},
+  {"description":"Ashcraft Garlic","shelf_life_days":5},
+  {"description":"Cafe Valley Cakes","shelf_life_days":10},
+  {"description":"Cafe Valley Croissants","shelf_life_days":7},
+  {"description":"Cafe Valley Mini Bundt Cakes","shelf_life_days":10},
+  {"description":"Cafe Valley Mini Muffins 12ct","shelf_life_days":14},
+  {"description":"Cafe Valley Muffins 4ct","shelf_life_days":10},
+  {"description":"Cafe Valley Turnovers","shelf_life_days":5},
+  {"description":"Clover Hill Danish","shelf_life_days":30},
+  {"description":"Clyde's Donuts","shelf_life_days":7},
+  {"description":"Dessert Shell","shelf_life_days":7},
+  {"description":"Father's Table Cheesecake","shelf_life_days":10},
+  {"description":"Hostess Cakes","shelf_life_days":30},
+  {"description":"Jessie Lord Pies","shelf_life_days":5},
+  {"description":"JJ's Pies","shelf_life_days":21},
+  {"description":"Kim's Cupcakes","shelf_life_days":14},
+  {"description":"Kimberly Cupcakes","shelf_life_days":14},
+  {"description":"King's Hawaiian","shelf_life_days":14},
+  {"description":"Kountry Boys Pies","shelf_life_days":45},
+  {"description":"Lofthouse Bucket","shelf_life_days":140},
+  {"description":"Lofthouse Frosted","shelf_life_days":28},
+  {"description":"Lofthouse Soft Cookies","shelf_life_days":14},
+  {"description":"Lofthouse Sugar Cookies","shelf_life_days":28},
+  {"description":"Mrs. Freshley Pecan Twirls","shelf_life_days":30},
+  {"description":"Nemo Bundt","shelf_life_days":30},
+  {"description":"Nemo Cake","shelf_life_days":7},
+  {"description":"Nemo Square","shelf_life_days":7},
+  {"description":"Nemo's Coffee","shelf_life_days":30},
+  {"description":"Otis Spunkmeyer Cookies","shelf_life_days":60},
+  {"description":"Otis Spunkmeyer Muffins","shelf_life_days":35},
+  {"description":"Quality Bakery","shelf_life_days":5},
+  {"description":"Toufayan Bagels","shelf_life_days":5},
+  {"description":"Vanilla Twirl","shelf_life_days":14},
+  {"description":"Wonder","shelf_life_days":56}
+];
+
+let filtered = [...items];
+
+function populateSelect(list) {
+  const sel = document.getElementById('itemSelect');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— choose an item —</option>';
+  list.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item.shelf_life_days;
+    opt.textContent = item.description + ' (' + item.shelf_life_days + 'd)';
+    sel.appendChild(opt);
+  });
+  document.getElementById('itemCount').textContent = list.length + ' items';
+  if (current) {
+    sel.value = current;
+    calculate();
+  }
+}
+
+function filterItems() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  filtered = items.filter(i => i.description.toLowerCase().includes(q));
+  populateSelect(filtered);
+}
+
+function setToday() {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth()+1).padStart(2,'0');
+  const d = String(today.getDate()).padStart(2,'0');
+  document.getElementById('stockDate').value = y+'-'+m+'-'+d;
+  calculate();
+}
+
+function calculate() {
+  const sel = document.getElementById('itemSelect');
+  const dateVal = document.getElementById('stockDate').value;
+  const shelfDays = parseInt(sel.value);
+
+  if (!sel.value || !dateVal) {
+    document.getElementById('result').classList.remove('show');
+    return;
+  }
+
+  const stockDate = new Date(dateVal + 'T00:00:00');
+  const expDate = new Date(stockDate);
+  expDate.setDate(expDate.getDate() + shelfDays);
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const daysLeft = Math.round((expDate - today) / (1000*60*60*24));
+
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  const expStr = months[expDate.getMonth()] + ' ' + expDate.getDate() + ', ' + expDate.getFullYear();
+  const dayName = days[expDate.getDay()];
+
+  document.getElementById('expDateBig').textContent = expStr;
+  document.getElementById('expDayName').textContent = dayName;
+  document.getElementById('shelfDays').textContent = shelfDays;
+  document.getElementById('daysLeft').textContent = daysLeft >= 0 ? daysLeft : 0;
+
+  const warn = document.getElementById('warning');
+  if (daysLeft < 0) {
+    warn.textContent = 'Expired ' + Math.abs(daysLeft) + ' day' + (Math.abs(daysLeft) === 1 ? '' : 's') + ' ago. Pull this item.';
+    warn.classList.add('show');
+  } else if (daysLeft <= 2) {
+    warn.textContent = 'Expires very soon. Check shelf and markdown if needed.';
+    warn.classList.add('show');
+  } else if (daysLeft <= 5) {
+    warn.textContent = 'Expiring in ' + daysLeft + ' days. Monitor closely.';
+    warn.classList.add('show');
+  } else {
+    warn.classList.remove('show');
+  }
+
+  document.getElementById('result').classList.add('show');
+}
+
+populateSelect(items);
+setToday();
+</script>
+</body>
+</html>
