@@ -1,5 +1,3 @@
-
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -139,9 +137,53 @@ body.mobile #missingStoresCard { font-size:13px;padding:8px;}
   footer { font-size:12px;}
   #missingStoresCard { font-size:13px;padding:8px;}
 }
+
+/* --- access gate (added) --- */
+body.locked header,
+body.locked main,
+body.locked #storesModalOverlay { display:none !important; }
+#gate{
+  position:fixed; inset:0; z-index:5000; display:none;
+  align-items:center; justify-content:center;
+  background:linear-gradient(160deg,#eef4ff 0%,#f6f8fb 100%);
+}
+body.locked #gate{ display:flex; }
+#gate .gate-card{
+  background:#fff; border:1px solid #e3e8f5; border-radius:12px;
+  box-shadow:0 6px 30px rgba(12,20,60,0.12);
+  padding:28px 26px 22px; width:min(340px,92vw); text-align:center;
+}
+#gate .gate-badge{
+  width:46px; height:46px; border-radius:50%; margin:0 auto 14px;
+  background:#eef3ff; display:flex; align-items:center; justify-content:center; font-size:20px;
+}
+#gate h2{ margin:0 0 4px 0; font-size:17px; color:#111 }
+#gate p{ margin:0 0 16px 0; font-size:13px; color:#6b7280 }
+#gate #pw{
+  width:100%; text-align:center; font-size:18px; letter-spacing:.35em; text-indent:.35em;
+  padding:10px; border:1px solid #d6dbe9; border-radius:8px;
+}
+#gate #pw:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(11,105,255,0.15) }
+#gate #btnUnlock{ width:100%; margin-top:10px; padding:10px }
+#gateMsg{ min-height:18px; margin-top:10px; font-size:13px; color:#c0392b }
+#gate .shake{ animation:gateShake .3s }
+@keyframes gateShake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+@media (prefers-reduced-motion:reduce){ #gate .shake{ animation:none } }
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-badge">&#128274;</div>
+    <h2>Joe Valadez Inventory</h2>
+    <p>Enter the code to continue</p>
+    <input type="password" id="pw" inputmode="numeric" autocomplete="off"
+           autocorrect="off" spellcheck="false" aria-label="Password" />
+    <button id="btnUnlock">Unlock</button>
+    <div id="gateMsg" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
 <header>
   <h1>Joe Valadez Inventory</h1>
   <button id="storesBtn" title="Edit known stores">&#128203; Stores</button>
@@ -165,7 +207,7 @@ body.mobile #missingStoresCard { font-size:13px;padding:8px;}
       </div>
     </div>
     <div class="col card">
-      <label>Imported Stores & File Names</label>
+      <label>Imported Stores &amp; File Names</label>
       <div id="importPreview" class="list" style="min-height:60px"></div>
       <div class="actions" style="margin-top:10px">
         <button id="aggregateBtn" class="small">Create Database</button>
@@ -959,13 +1001,47 @@ function renderInventoryGrid(agg){
     };
   });
 }
-window.addEventListener('DOMContentLoaded', function() {
+window.__mobileTip = function() {
   if(document.body.classList.contains('mobile')) {
     setTimeout(function(){
       alert("Tip: For easier editing, rotate your phone to landscape. You can scroll the inventory grid sideways.");
     }, 1500);
   }
-});
+};
+</script>
+
+<script>
+/* --- access gate (added) ---
+   Base64 only. Keeps the page out of casual sight; it is not encryption. */
+(function(){
+  var LOCK = 'NjYyMzk=';
+  var pw = document.getElementById('pw');
+  var msg = document.getElementById('gateMsg');
+  var card = document.querySelector('#gate .gate-card');
+  function unlock(){
+    var ok = false;
+    try { ok = (pw.value === atob(LOCK)); } catch(e){ ok = false; }
+    if(ok){
+      document.body.classList.remove('locked');
+      pw.value = '';
+      msg.textContent = '';
+      if(typeof window.__mobileTip === 'function') window.__mobileTip();
+      var first = document.getElementById('templateFile');
+      if(first) first.focus();
+      return;
+    }
+    msg.textContent = 'Wrong code.';
+    pw.value = '';
+    pw.focus();
+    card.classList.remove('shake');
+    void card.offsetWidth;
+    card.classList.add('shake');
+  }
+  document.getElementById('btnUnlock').addEventListener('click', unlock);
+  pw.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); unlock(); } });
+  pw.addEventListener('input', function(){ msg.textContent = ''; });
+  pw.focus();
+})();
 </script>
 </body>
 </html>
